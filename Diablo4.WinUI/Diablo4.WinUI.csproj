@@ -8,6 +8,8 @@
         <!-- WinUI 3 -->
         <UseWinUI>true</UseWinUI>
         <EnableMsixTooling>true</EnableMsixTooling>
+        <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+        <WindowsPackageType Condition="'$(Configuration)' == 'Debug'">None</WindowsPackageType>
         <!-- <WindowsSdkPackageVersion>10.0.19041.38</WindowsSdkPackageVersion> -->
 
         <!-- Project Options -->

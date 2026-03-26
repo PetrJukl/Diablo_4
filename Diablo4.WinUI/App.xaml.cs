@@ -4,22 +4,64 @@ using Diablo4.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Diablo4.WinUI;
 
 public partial class App : Application
 {
+    private static readonly string StartupErrorLogPath = Path.Combine(Path.GetTempPath(), "Diablo4.WinUI.startup.log");
+
     public static MainWindow? MainWindow { get; private set; }
 
     public App()
     {
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         InitializeComponent();
+    }
+
+    private static void CurrentDomain_UnhandledException(object sender, System.UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
+        {
+            LogStartupException("AppDomain.UnhandledException", ex);
+        }
+    }
+
+    private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        LogStartupException("TaskScheduler.UnobservedTaskException", e.Exception);
+    }
+
+    private static void LogStartupException(string source, Exception ex)
+    {
+        try
+        {
+            File.AppendAllText(
+                StartupErrorLogPath,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch (IOException ioEx)
+        {
+            Debug.WriteLine(ioEx);
+        }
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        MainWindow = new MainWindow();
-        MainWindow.Activate();
+        try
+        {
+            MainWindow = new MainWindow();
+            MainWindow.Activate();
+        }
+        catch (Exception ex)
+        {
+            LogStartupException("App.OnLaunched", ex);
+            throw;
+        }
 
         var updateService = new UpdateService(AppConfiguration.GitHubUpdateManifestUrl);
         var updateResult = await updateService.CheckForUpdatesAsync();

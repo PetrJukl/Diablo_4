@@ -1,1 +1,13 @@
-.vs
+.vs/
+
+# Build outputs
+**/[Bb]in/
+**/[Oo]bj/
+
+# Legacy ClickOnce publish outputs
+**/app.publish/
+
+# Visual Studio user/cache files
+*.user
+*.suo
+*.userosscache

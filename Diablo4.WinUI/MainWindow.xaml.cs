@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.Input;
 using Diablo4.WinUI.Helpers;
 using Diablo4.WinUI.ViewModels;
 using Diablo4.WinUI.Views;
-using H.NotifyIcon;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -15,9 +14,7 @@ public sealed partial class MainWindow : Window
 {
     private AppWindow? _appWindow;
     private bool _isInitialized;
-    private bool _isExitRequested;
-
-    private TaskbarIcon TrayIcon => (TaskbarIcon)RootGrid.Resources["TrayIcon"];
+    private bool _windowConfigured;
 
     public MainViewModel ViewModel { get; }
     public IRelayCommand RestoreWindowCommand { get; }
@@ -34,16 +31,19 @@ public sealed partial class MainWindow : Window
 
         Activated += MainWindow_Activated;
         Closed += MainWindow_Closed;
-        ConfigureWindow();
     }
 
     private void ConfigureWindow()
     {
+        if (_windowConfigured)
+        {
+            return;
+        }
+
         var hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Resize(new SizeInt32(1245, 575));
-        _appWindow.Closing += AppWindow_Closing;
 
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
@@ -52,7 +52,7 @@ public sealed partial class MainWindow : Window
             presenter.IsMinimizable = false;
         }
 
-        TrayIcon.ForceCreate();
+        _windowConfigured = true;
     }
 
     private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
@@ -63,19 +63,9 @@ public sealed partial class MainWindow : Window
         }
 
         _isInitialized = true;
+        ConfigureWindow();
         ProcessHelper.CloseOtherInstances("Diablo4.WinUI");
         ViewModel.Initialize(DispatcherQueue);
-    }
-
-    private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
-    {
-        if (_isExitRequested)
-        {
-            return;
-        }
-
-        args.Cancel = true;
-        WindowExtensions.Hide(this);
     }
 
     private async void ViewModel_WeekendMotivationRequested(object? sender, EventArgs e)
@@ -95,14 +85,11 @@ public sealed partial class MainWindow : Window
 
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        _isExitRequested = true;
-        TrayIcon.Dispose();
         Close();
     }
 
     private void RestoreWindow()
     {
-        WindowExtensions.Show(this);
         Activate();
     }
 
@@ -110,8 +97,6 @@ public sealed partial class MainWindow : Window
     {
         ViewModel.Cleanup();
         ViewModel.WeekendMotivationRequested -= ViewModel_WeekendMotivationRequested;
-        _appWindow?.Closing -= AppWindow_Closing;
     }
 }
-
 
