@@ -27,6 +27,8 @@
         <RuntimeIdentifiers Condition="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)')) &lt; 8">win10-x86;win10-x64;win10-arm64</RuntimeIdentifiers>
     </PropertyGroup>
     <ItemGroup>
+        <Content Include="Assets\211668_controller_b_game_icon.ico" />
+        <Content Include="Assets\9193516_swords_protection_shield_weapon_violence_icon.ico" />
         <Content Include="Assets\SplashScreen.scale-200.png" />
         <Content Include="Assets\LockScreenLogo.scale-200.png" />
         <Content Include="Assets\Square150x150Logo.scale-200.png" />

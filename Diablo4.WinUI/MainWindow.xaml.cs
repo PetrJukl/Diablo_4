@@ -81,7 +81,7 @@ public sealed partial class MainWindow : Window
 
         if (ViewModel.IsProcessRunning)
         {
-            MinimizeWindow();
+            HideToTrayOrMinimize();
         }
     }
 
@@ -92,7 +92,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        MinimizeWindow();
+        HideToTrayOrMinimize();
     }
 
     private async void ViewModel_WeekendMotivationRequested(object? sender, EventArgs e)
@@ -132,6 +132,17 @@ public sealed partial class MainWindow : Window
         {
             presenter.Minimize();
         }
+    }
+
+    private void HideToTrayOrMinimize()
+    {
+        if (_isTrayAvailable)
+        {
+            WindowExtensions.Hide(this);
+            return;
+        }
+
+        MinimizeWindow();
     }
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -182,7 +193,7 @@ public sealed partial class MainWindow : Window
 
     private static ImageSource CreateTrayIconSource()
     {
-        return new BitmapImage(new Uri("ms-appx:///Assets/Square44x44Logo.scale-200.png"));
+        return new BitmapImage(new Uri("ms-appx:///Assets/211668_controller_b_game_icon.ico"));
     }
 
     private void MainWindow_Closed(object sender, WindowEventArgs args)
