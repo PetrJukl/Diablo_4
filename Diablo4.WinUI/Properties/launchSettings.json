@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Diablo4.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Diablo4.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

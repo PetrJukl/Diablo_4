@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Diablo4.WinUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:tb="using:H.NotifyIcon"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid">
+        <Grid.Resources>
+            <MenuFlyout x:Key="TrayMenu">
+                <MenuFlyoutItem Text="Obnovit" Click="RestoreMenuItem_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Ukončit" Click="ExitMenuItem_Click" />
+            </MenuFlyout>
+
+            <tb:TaskbarIcon
+                x:Key="TrayIcon"
+                ContextFlyout="{StaticResource TrayMenu}"
+                LeftClickCommand="{x:Bind RestoreWindowCommand}"
+                MenuActivation="RightClick"
+                NoLeftClickDelay="True"
+                ToolTipText="Kontrola pařby">
+                <tb:TaskbarIcon.IconSource>
+                    <tb:GeneratedIconSource
+                        Text="D4"
+                        Background="#111111"
+                        BorderBrush="#A33CFF"
+                        BorderThickness="6"
+                        FontSize="44"
+                        FontWeight="Bold"
+                        Foreground="White" />
+                </tb:TaskbarIcon.IconSource>
+            </tb:TaskbarIcon>
+        </Grid.Resources>
+
+        <Grid.Background>
+            <ImageBrush ImageSource="/Assets/diablo.jpeg" Stretch="UniformToFill"/>
+        </Grid.Background>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock
+            x:Name="messageLabel"
+            Grid.Row="1"
+            Text="{x:Bind ViewModel.MessageText, Mode=OneWay}"
+            FontSize="45"
+            Foreground="White"
+            TextAlignment="Center"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            MaxWidth="1333"
+            TextWrapping="Wrap"
+            Margin="20"/>
+
+        <TextBlock
+            x:Name="weekDuration"
+            Grid.Row="2"
+            Text="{x:Bind ViewModel.WeekDurationText, Mode=OneWay}"
+            FontSize="29"
+            FontWeight="Bold"
+            Foreground="White"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="8,20,0,0"/>
+
+        <TextBlock
+            x:Name="lastWeekDuration"
+            Grid.Row="3"
+            Text="{x:Bind ViewModel.LastWeekDurationText, Mode=OneWay}"
+            FontSize="29"
+            FontStyle="Italic"
+            Foreground="White"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="8,20,0,0"/>
+    </Grid>
+</Window>
