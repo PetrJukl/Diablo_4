@@ -14,6 +14,7 @@ public partial class MainViewModel : ObservableObject
     private ProcessMonitor? _processMonitor;
     private DispatcherQueueTimer? _messageUpdateTimer;
     private DispatcherQueueTimer? _statsUpdateTimer;
+    private bool _lastKnownProcessRunningState;
 
     [ObservableProperty]
     private string _messageText = "Text";
@@ -28,6 +29,7 @@ public partial class MainViewModel : ObservableObject
     private bool _isWeekend = false;
 
     public event EventHandler? WeekendMotivationRequested;
+    public event EventHandler<bool>? ProcessRunningStateChanged;
 
     public MainViewModel()
     {
@@ -121,6 +123,7 @@ public partial class MainViewModel : ObservableObject
 
             // Check weekend motivation
             CheckWeekendMotivation();
+            NotifyProcessRunningState(_processMonitor.IsRunning);
         }
         catch (Exception)
         {
@@ -141,6 +144,17 @@ public partial class MainViewModel : ObservableObject
     }
 
     public bool IsProcessRunning => _processMonitor?.IsRunning ?? false;
+
+    private void NotifyProcessRunningState(bool isRunning)
+    {
+        if (_lastKnownProcessRunningState == isRunning)
+        {
+            return;
+        }
+
+        _lastKnownProcessRunningState = isRunning;
+        ProcessRunningStateChanged?.Invoke(this, isRunning);
+    }
 
     public void Cleanup()
     {
