@@ -1,0 +1,17 @@
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.csproj.AssemblyReference.cache
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo_4.Form1.resources
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo_4.Properties.Resources.resources
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo_4.WeekendMotivation.resources
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.csproj.GenerateResource.cache
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.csproj.CoreCompileInputs.cache
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.exe
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.pdb
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Pictures\diablo.jpeg
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Diablo 4.exe.config
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Diablo 4.exe.manifest
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Diablo 4.application
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Diablo 4.exe
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\bin\Release\Diablo 4.pdb
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.TrustInfo.xml
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.exe.manifest
+C:\Users\JuklP\OneDrive\Programování\Moje tvorba\Diablo 4\Diablo 4\obj\Release\Diablo 4.application
