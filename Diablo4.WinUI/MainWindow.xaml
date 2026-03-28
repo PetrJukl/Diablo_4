@@ -8,13 +8,6 @@
     mc:Ignorable="d">
 
     <Grid x:Name="RootGrid">
-        <Grid.Resources>
-            <MenuFlyout x:Key="TrayMenu">
-                <MenuFlyoutItem Text="Obnovit" Click="RestoreMenuItem_Click" />
-                <MenuFlyoutSeparator />
-                <MenuFlyoutItem Text="Ukončit" Click="ExitMenuItem_Click" />
-            </MenuFlyout></Grid.Resources>
-
         <Grid.Background>
             <ImageBrush ImageSource="/Assets/diablo.jpeg" Stretch="UniformToFill"/>
         </Grid.Background>

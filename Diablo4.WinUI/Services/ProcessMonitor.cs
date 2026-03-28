@@ -1,13 +1,13 @@
+using Diablo4.WinUI.Models;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
-using Windows.UI.Xaml.Automation;
 
 namespace Diablo4.WinUI.Services;
 
@@ -22,13 +22,12 @@ public class ProcessMonitor
     private long _lastLogPosition = 0;
     private DateTime? _firstDetectionTime;
     
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-    
     private bool _isWebRunning = false;
     private bool _isCheckingTabs = false;
-    public bool IsRunning { get; private set; } = false;
-    
+    private volatile bool _isProcessing;
+    private volatile bool _isRunning;
+    public bool IsRunning => _isRunning;
+
     private readonly bool _shouldCheckWebContent;
 
     public ProcessMonitor(string filePath, bool checkWebContent, params string[] processNames)
@@ -62,10 +61,20 @@ public class ProcessMonitor
 
     private void OnTimerTick(DispatcherQueueTimer sender, object args)
     {
+        if (_isProcessing) return;
+        _isProcessing = true;
         Task.Run(() =>
         {
-            FirstCheckProcess();
-            WriteProcessDuration();
+            try
+            {
+                var processes = Process.GetProcesses();
+                FirstCheckProcess(processes);
+                WriteProcessDuration(processes);
+            }
+            finally
+            {
+                _isProcessing = false;
+            }
         });
     }
 
@@ -74,13 +83,13 @@ public class ProcessMonitor
         Task.Run(() => CheckAllOpenTabsForUdemy());
     }
 
-    private void FirstCheckProcess()
+    private void FirstCheckProcess(Process[] processes)
     {
         bool isAnyProcessRunning = false;
 
         foreach (var processName in _processNames)
         {
-            var processExists = Process.GetProcesses().Any(x => x.ProcessName == processName);
+            var processExists = processes.Any(x => x.ProcessName == processName);
             if (processExists || _isWebRunning)
             {
                 isAnyProcessRunning = true;
@@ -104,17 +113,17 @@ public class ProcessMonitor
         }
     }
 
-    private void WriteProcessDuration()
+    private void WriteProcessDuration(Process[] processes)
     {
         bool isAnyProcessRunning = false;
 
         foreach (var processName in _processNames)
         {
-            var processExists = Process.GetProcesses().Any(x => x.ProcessName == processName);
+            var processExists = processes.Any(x => x.ProcessName == processName);
             if (processExists || _isWebRunning)
             {
                 isAnyProcessRunning = true;
-                IsRunning = true;
+                _isRunning = true;
 
                 if (!_processStartTime.HasValue)
                 {
@@ -138,7 +147,7 @@ public class ProcessMonitor
         if (!isAnyProcessRunning)
         {
             _processStartTime = null;
-            IsRunning = false;
+            _isRunning = false;
         }
     }
 
@@ -153,28 +162,32 @@ public class ProcessMonitor
         return CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(time, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
     }
 
-    public List<TimeSpan> GetDurations(string filePath, int actualWeekOfYear)
+    public WeeklyDurations GetDurations(string filePath, int actualWeekOfYear)
     {
         var weeklyDurations = new TimeSpan();
         var lastWeekDuration = new TimeSpan();
-        List<TimeSpan> durations = new List<TimeSpan>();
         int actualYear = DateTime.Now.Year;
         int weeksInLastYear = GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) != 1 
             ? GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) 
             : GetIso8601WeekOfYear(DateTime.Parse($"27.12.{actualYear - 1}"));
 
-        IEnumerable<string>? lines = null;
-        while (lines == null)
+        string[]? lines = null;
+        const int maxRetries = 5;
+        for (int i = 0; i < maxRetries; i++)
         {
             try
             {
-                lines = File.ReadLines(filePath);
+                lines = File.ReadAllLines(filePath);
+                break;
             }
-            catch (IOException)
+            catch (IOException) when (i < maxRetries - 1)
             {
-                Task.Delay(200).Wait();
+                Thread.Sleep(200);
             }
         }
+
+        if (lines == null)
+            return new WeeklyDurations(TimeSpan.Zero, TimeSpan.Zero);
 
         foreach (var line in lines)
         {
@@ -202,10 +215,7 @@ public class ProcessMonitor
             }
         }
 
-        durations.Add(weeklyDurations != TimeSpan.Zero ? weeklyDurations : new TimeSpan());
-        durations.Add(lastWeekDuration != TimeSpan.Zero ? lastWeekDuration : new TimeSpan());
-
-        return durations;
+        return new WeeklyDurations(weeklyDurations, lastWeekDuration);
     }
 
     private void CheckAllOpenTabsForUdemy()
@@ -215,17 +225,13 @@ public class ProcessMonitor
 
         try
         {
-            IntPtr firefoxWindow = FindWindow("MozillaWindowClass", null);
-            bool foundUdemy = false;
-
-            if (firefoxWindow != IntPtr.Zero)
-            {
-                // TODO: Implement UI Automation for Firefox if needed
-                // This requires Windows.UI.Xaml.Automation which may need adaptation for WinUI 3
-                // For now, stub it out
-            }
-
-            _isWebRunning = foundUdemy;
+            _isWebRunning = Process.GetProcesses()
+                .Where(p => p.ProcessName is "firefox" or "chrome" or "msedge")
+                .Any(p =>
+                {
+                    try { return p.MainWindowTitle.Contains("udemy", StringComparison.OrdinalIgnoreCase); }
+                    catch { return false; }
+                });
         }
         finally
         {
@@ -235,22 +241,26 @@ public class ProcessMonitor
 
     private void WriteToFile(string content, FileMode mode, AccessMode access)
     {
+        const int maxRetries = 5;
         FileStream? stream = null;
-        while (stream == null)
+        for (int i = 0; i < maxRetries; i++)
         {
             try
             {
                 var fileAccess = access == AccessMode.Write ? FileAccess.Write : FileAccess.Read;
                 stream = new FileStream(_filePath, mode, fileAccess, FileShare.Read);
+                break;
             }
-            catch (IOException)
+            catch (IOException) when (i < maxRetries - 1)
             {
-                Task.Delay(50).Wait();
+                Thread.Sleep(50);
             }
         }
 
+        if (stream == null) return;
+
         using (stream)
-        using (StreamWriter writer = new StreamWriter(stream))
+        using (var writer = new StreamWriter(stream))
         {
             writer.Write(content);
         }
@@ -258,19 +268,23 @@ public class ProcessMonitor
 
     private void WriteToFileAtPosition(string content, long position)
     {
+        const int maxRetries = 5;
         FileStream? stream = null;
-        while (stream == null)
+        for (int i = 0; i < maxRetries; i++)
         {
             try
             {
                 stream = new FileStream(_filePath, FileMode.Open, FileAccess.Write, FileShare.Read);
                 stream.Position = position;
+                break;
             }
-            catch (IOException)
+            catch (IOException) when (i < maxRetries - 1)
             {
-                Task.Delay(70).Wait();
+                Thread.Sleep(70);
             }
         }
+
+        if (stream == null) return;
 
         using (stream)
         using (var writer = new StreamWriter(stream))

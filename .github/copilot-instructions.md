@@ -1,5 +1,4 @@
 ﻿# Globální GitHub Copilot Instrukce
-- V každém projektu povinně používej pracovní log `.github\log.log`. Pokud chybí, vytvoř ho ještě před první změnou. Než navrhneš nebo   provedeš další krok, vždy nejdřív projdi poslední relevantní záznamy v logu a neopakuj už neúspěšné pokusy. Po každé změně logiky, spuštění skriptu, testu, migraci nebo rollbacku ihned přidej stručný zápis: co se provedlo, proč, kterých souborů se to týkalo, s jakým výsledkem a jaký je poslední ověřený funkční stav. Krok bez zápisu nepovažuj za dokončený. Log průběžně čti a udržuj ho přesný, stručný a aktuální.
 - Používej ověřené řešení, používej MCP servery, dokumentaci, github, když řešení neexistuje, tak ho vymysli.
 - Destruktivní operace jako mazaní souborů, nebo adresářů pouze po schválení uživatelem.
 
@@ -13,12 +12,9 @@
 ## Plán (plan.md), konvence názvů a šablona
 - Plán piš v češtině.
 - Plán prvně vytvořit, po schválení uživatelem teprve přejít na implementaci.
-- Plán mód používej i pro verifikaci, ne jen pro implementaci.
+- Drž se šablony -> `github\plans\_template.md`.
 - Předem napiš detailní specifikaci, ať je co nejméně nejasností.
-- Plány ukládej do `.github/plans/` jako: `.github/plans/PLAN-YYYY-MM-DD-<slug>.md`.
-- `<slug>`: malá písmena, bez diakritiky, slova oddělená `-`, jen `[a-z0-9-]`.
-- Detailní pravidla a příklady viz `.github/plans/NAMING-CONVENTION.md`.
-- Nové plány vytvářej podle šablony `.github/plans/_template.md`.
+- Plány ukládej do `.github/plans/`.
 
 ## Řízený workflow
 
@@ -46,8 +42,7 @@
 
 ### Ověrení před označením hotovo
 - Nikdy neoznačuj úkol za hotový bez důkazu, že funguje.
-- Když je to relevantní, porovnej chování původní verze a změn.
-- Spusť testy, zkontroluj logy a předveď korektnost, když nejsou logy -> vytvoř senior standard pro záchyt a zápis logů, pak otestuj.
+- Spusť testy, jestli exiatují.
 
 ### Autonomní bug fixing
 - Vezmi logy, chyby a failing testy a oprav je.
@@ -92,7 +87,7 @@
 
 ## Task Management
 
-1. Plan First: Napiš plán do `.github/plans/PLAN-YYYY-MM-DD-<slug>.md` souboru se checkbox body.
+1. Plan First: Napiš plán do `.github/plans/` souboru s checkbox body.
 2. Track Progress: Průběžně označuj hotové body.
 3. Explain Changes: V každém kroku dej high-level shrnutí.
 4. Před odevzdáním ověř funkčnost řešení/kódu -> podle aktuálních ověřených dat a dokumentace přes dostupné MCP servery, nebo gitHub repository, ne odhadem.
@@ -107,5 +102,5 @@
 
 ## Meta
 
-- **Verze:** 6.0
-- **Poslední aktualizace:** 2026-03-15
+- **Verze:** 7.0
+- **Poslední aktualizace:** 2026-03-28

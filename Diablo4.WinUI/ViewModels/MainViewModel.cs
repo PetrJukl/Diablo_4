@@ -1,9 +1,10 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Diablo4.WinUI.Helpers;
+using Diablo4.WinUI.Models;
 using Diablo4.WinUI.Services;
 using Microsoft.UI.Dispatching;
 using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 
 namespace Diablo4.WinUI.ViewModels;
@@ -27,6 +28,7 @@ public partial class MainViewModel : ObservableObject
 
     private TimeSpan _totalDuration = new TimeSpan();
     private bool _isWeekend = false;
+    private DateTime? _cachedLastPlayedDateTime;
 
     public event EventHandler? WeekendMotivationRequested;
     public event EventHandler<bool>? ProcessRunningStateChanged;
@@ -38,6 +40,8 @@ public partial class MainViewModel : ObservableObject
 
     public void Initialize(DispatcherQueue dispatcherQueue)
     {
+        LoadCachedLastPlayedDateTime();
+
         // Start message update timer (50ms)
         _messageUpdateTimer = dispatcherQueue.CreateTimer();
         _messageUpdateTimer.Interval = TimeSpan.FromMilliseconds(50);
@@ -56,7 +60,9 @@ public partial class MainViewModel : ObservableObject
             "Code",
             "Dragon Age The Veilguard",
             "DragonAge2",
-            "daorigins"
+            "daorigins",
+            "WindowsTerminal",
+            "OpenConsole"
         );
         _processMonitor.Start(dispatcherQueue);
 
@@ -69,39 +75,25 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateMessageTimerTick(DispatcherQueueTimer sender, object args)
     {
-        if (File.Exists(_filePath))
-        {
-            try
-            {
-                using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var reader = new StreamReader(stream);
-                string? fileContent = reader.ReadLine();
-
-                if (DateTime.TryParse(fileContent, out DateTime lastWriteTime))
-                {
-                    TimeSpan timeSinceLastWrite = DateTime.Now - lastWriteTime;
-                    MessageText = $"Už jsi nepařila: {timeSinceLastWrite.Days} dní, {timeSinceLastWrite.Hours} hodiny,\n  {timeSinceLastWrite.Minutes} minuty, {timeSinceLastWrite.Seconds} sekund a {timeSinceLastWrite.Milliseconds} miliseků :).";
-                }
-            }
-            catch (IOException)
-            {
-                // File is being used, try next time
-            }
-        }
+        if (_cachedLastPlayedDateTime == null) return;
+        TimeSpan timeSinceLastWrite = DateTime.Now - _cachedLastPlayedDateTime.Value;
+        MessageText = $"Už jsi nepařila: {timeSinceLastWrite.Days} dní, {timeSinceLastWrite.Hours} hodiny,\n  {timeSinceLastWrite.Minutes} minuty, {timeSinceLastWrite.Seconds} sekund a {timeSinceLastWrite.Milliseconds} miliseků :).";
     }
 
     private void UpdateStatsTimerTick(DispatcherQueueTimer sender, object args)
     {
         if (_processMonitor == null) return;
 
+        LoadCachedLastPlayedDateTime();
+
         try
         {
             int currentWeekOfYear = _processMonitor.GetIso8601WeekOfYear(DateTime.Now);
-            List<TimeSpan> actualAndLastWeek = _processMonitor.GetDurations(_filePath, currentWeekOfYear);
+            var durations = _processMonitor.GetDurations(_filePath, currentWeekOfYear);
 
-            if (actualAndLastWeek[0] != TimeSpan.Zero)
+            if (durations.ThisWeek != TimeSpan.Zero)
             {
-                _totalDuration = actualAndLastWeek[0];
+                _totalDuration = durations.ThisWeek;
                 string formattedDuration = $"{Math.Floor(_totalDuration.TotalHours)} hodin, {_totalDuration.Minutes} minut a {_totalDuration.Seconds} vteřin";
                 WeekDurationText = $"Tento týden \n {formattedDuration}";
             }
@@ -110,9 +102,9 @@ public partial class MainViewModel : ObservableObject
                 WeekDurationText = "Chtělo by to roztočit grafárnu.";
             }
 
-            if (actualAndLastWeek[1] != TimeSpan.Zero)
+            if (durations.LastWeek != TimeSpan.Zero)
             {
-                TimeSpan lastWeekTotalDuration = actualAndLastWeek[1];
+                TimeSpan lastWeekTotalDuration = durations.LastWeek;
                 string formattedDuration = $"{Math.Floor(lastWeekTotalDuration.TotalHours)} hodin, {lastWeekTotalDuration.Minutes} minut a {lastWeekTotalDuration.Seconds} vteřin";
                 LastWeekDurationText = $"Minulý týden \n {formattedDuration}";
             }
@@ -125,15 +117,29 @@ public partial class MainViewModel : ObservableObject
             CheckWeekendMotivation();
             NotifyProcessRunningState(_processMonitor.IsRunning);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log error or handle gracefully
+            Debug.WriteLine($"[UpdateStatsTimerTick] {ex}");
         }
+    }
+
+    private void LoadCachedLastPlayedDateTime()
+    {
+        if (!File.Exists(_filePath)) return;
+        try
+        {
+            using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            string? firstLine = reader.ReadLine();
+            if (DateTime.TryParse(firstLine, out DateTime dt))
+                _cachedLastPlayedDateTime = dt;
+        }
+        catch (IOException) { }
     }
 
     private void CheckWeekendMotivation()
     {
-        if (!_isWeekend && _totalDuration.TotalHours < 25 &&
+        if (!_isWeekend && _totalDuration.TotalHours < 10 &&
             (DateTime.Now.DayOfWeek == DayOfWeek.Friday ||
              DateTime.Now.DayOfWeek == DayOfWeek.Saturday ||
              DateTime.Now.DayOfWeek == DayOfWeek.Sunday))

@@ -21,10 +21,12 @@ public sealed partial class MainWindow : Window
     private TaskbarIcon? _trayIcon;
     private bool _isInitialized;
     private bool _isExitRequested;
+    private bool _isWeekendMotivationOpen;
     private bool _isTrayAvailable;
     private bool _windowConfigured;
 
     public MainViewModel ViewModel { get; }
+    private IRelayCommand ExitApplicationCommand { get; }
     public IRelayCommand RestoreWindowCommand { get; }
     public FrameworkElement DialogRoot => RootGrid;
 
@@ -33,6 +35,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         Title = "Kontrola pařby";
+        ExitApplicationCommand = new RelayCommand(ExitApplication);
         RestoreWindowCommand = new RelayCommand(RestoreWindow);
         ViewModel = new MainViewModel();
         ViewModel.WeekendMotivationRequested += ViewModel_WeekendMotivationRequested;
@@ -53,6 +56,12 @@ public sealed partial class MainWindow : Window
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _appWindow.Resize(new SizeInt32(1245, 575));
 
+        var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
+        var workArea = displayArea.WorkArea;
+        _appWindow.Move(new PointInt32(
+            workArea.X + (workArea.Width - 1245) / 2,
+            workArea.Y + (workArea.Height - 575) / 2));
+
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsResizable = false;
@@ -69,6 +78,11 @@ public sealed partial class MainWindow : Window
     {
         if (_isInitialized)
         {
+            if (ViewModel.IsProcessRunning)
+            {
+                DispatcherQueue.TryEnqueue(HideToTrayOrMinimize);
+            }
+
             return;
         }
 
@@ -97,20 +111,26 @@ public sealed partial class MainWindow : Window
 
     private async void ViewModel_WeekendMotivationRequested(object? sender, EventArgs e)
     {
-        var dialog = new WeekendMotivationDialog
+        _isWeekendMotivationOpen = true;
+
+        var window = new WeekendMotivationDialog();
+
+        try
         {
-            XamlRoot = RootGrid.XamlRoot
-        };
+            await window.ShowAndWaitAsync();
+        }
+        finally
+        {
+            _isWeekendMotivationOpen = false;
 
-        await dialog.ShowAsync();
+            if (ViewModel.IsProcessRunning)
+            {
+                DispatcherQueue.TryEnqueue(HideToTrayOrMinimize);
+            }
+        }
     }
 
-    private void RestoreMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        RestoreWindow();
-    }
-
-    private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ExitApplication()
     {
         _isExitRequested = true;
         Close();
@@ -124,6 +144,11 @@ public sealed partial class MainWindow : Window
         }
 
         Activate();
+
+        if (ViewModel.IsProcessRunning)
+        {
+            DispatcherQueue.TryEnqueue(HideToTrayOrMinimize);
+        }
     }
 
     private void MinimizeWindow()
@@ -136,6 +161,11 @@ public sealed partial class MainWindow : Window
 
     private void HideToTrayOrMinimize()
     {
+        if (_isWeekendMotivationOpen)
+        {
+            return;
+        }
+
         if (_isTrayAvailable)
         {
             WindowExtensions.Hide(this);
@@ -165,16 +195,10 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var trayMenu = RootGrid.Resources["TrayMenu"] as MenuFlyout;
-            if (trayMenu == null)
-            {
-                return false;
-            }
-
             _trayIcon = new TaskbarIcon
             {
                 ToolTipText = "Kontrola pařby",
-                ContextFlyout = trayMenu,
+                ContextFlyout = CreateTrayMenu(),
                 LeftClickCommand = RestoreWindowCommand,
                 NoLeftClickDelay = true,
                 IconSource = CreateTrayIconSource()
@@ -189,6 +213,28 @@ public sealed partial class MainWindow : Window
             _trayIcon = null;
             return false;
         }
+    }
+
+    private MenuFlyout CreateTrayMenu()
+    {
+        var restoreItem = new MenuFlyoutItem
+        {
+            Text = "Obnovit",
+            Command = RestoreWindowCommand
+        };
+
+        var exitItem = new MenuFlyoutItem
+        {
+            Text = "Ukončit",
+            Command = ExitApplicationCommand
+        };
+
+        var menu = new MenuFlyout();
+        menu.Items.Add(restoreItem);
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(exitItem);
+
+        return menu;
     }
 
     private static ImageSource CreateTrayIconSource()

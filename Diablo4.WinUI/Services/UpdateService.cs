@@ -12,7 +12,7 @@ namespace Diablo4.WinUI.Services;
 
 public sealed class UpdateService
 {
-    private static readonly HttpClient HttpClient = new();
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly string _manifestUrl;
 
     public UpdateService(string manifestUrl)
