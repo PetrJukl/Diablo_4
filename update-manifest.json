@@ -1,0 +1,7 @@
+{
+  "LatestVersion": "1.0.0.0",
+  "DownloadUrl": "https://github.com/PetrJukl/Diablo_4/releases/latest",
+  "ReleaseNotes": "Manifest bude po prvním publikovaném release automaticky aktualizovaný GitHub workflowem.",
+  "MinimumVersion": "1.0.0.0",
+  "ReleaseDate": "2026-03-28T00:00:00Z"
+}

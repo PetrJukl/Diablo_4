@@ -1,0 +1,82 @@
+name: Update release manifest
+
+on:
+  release:
+    types:
+      - published
+      - edited
+
+permissions:
+  contents: write
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Update `update-manifest.json`
+        shell: pwsh
+        run: |
+          $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json -Depth 100
+          $release = $event.release
+          $assets = @($release.assets)
+          $supportedExtensions = '.msix', '.msixbundle', '.appinstaller', '.exe', '.zip'
+          $selectedAsset = $null
+
+          foreach ($extension in $supportedExtensions) {
+              $selectedAsset = $assets | Where-Object { $_.name -like "*$extension" } | Select-Object -First 1
+              if ($null -ne $selectedAsset) {
+                  break
+              }
+          }
+
+          if ($null -eq $selectedAsset) {
+              throw 'Release neobsahuje podporovaný instalační asset (.msix, .msixbundle, .appinstaller, .exe, .zip).'
+          }
+
+          $versionText = [string]$release.tag_name
+          if ([string]::IsNullOrWhiteSpace($versionText)) {
+              throw 'Release nemá vyplněný tag.'
+          }
+
+          $versionText = $versionText.TrimStart('v', 'V')
+          $parsedVersion = $null
+          if (-not [Version]::TryParse($versionText, [ref]$parsedVersion)) {
+              throw "Tag '$($release.tag_name)' nemá podporovaný formát verze. Použij např. v1.0.0.0."
+          }
+
+          $publishedAt = [string]$release.published_at
+          if ([string]::IsNullOrWhiteSpace($publishedAt)) {
+              $publishedAt = [DateTime]::UtcNow.ToString('O')
+          }
+
+          $manifest = [ordered]@{
+              LatestVersion = $parsedVersion.ToString()
+              DownloadUrl = [string]$selectedAsset.browser_download_url
+              ReleaseNotes = [string]$release.body
+              MinimumVersion = ''
+              ReleaseDate = $publishedAt
+          }
+
+          $manifest | ConvertTo-Json | Set-Content -Path 'update-manifest.json' -Encoding utf8NoBOM
+
+      - name: Commit updated manifest
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add update-manifest.json
+
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host 'Manifest beze změny.'
+              exit 0
+          }
+
+          git commit -m "chore: update release manifest for ${{ github.event.release.tag_name }}"
+          git push

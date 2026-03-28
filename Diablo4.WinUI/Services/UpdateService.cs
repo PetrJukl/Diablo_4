@@ -17,6 +17,7 @@ public sealed class UpdateService
 
     public UpdateService(string manifestUrl)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(manifestUrl);
         _manifestUrl = manifestUrl;
     }
 
@@ -24,14 +25,15 @@ public sealed class UpdateService
     {
         var currentVersion = GetCurrentVersion();
 
-        if (string.IsNullOrWhiteSpace(_manifestUrl) || _manifestUrl.Contains("example/diablo4", StringComparison.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(_manifestUrl, UriKind.Absolute, out var manifestUri))
         {
-            return UpdateCheckResult.Error("GitHub manifest URL není nakonfigurovaná.", currentVersion);
+            return UpdateCheckResult.Error("GitHub manifest URL není platná.", currentVersion);
         }
 
         try
         {
-            using var response = await HttpClient.GetAsync(_manifestUrl, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, manifestUri);
+            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return UpdateCheckResult.Error($"Manifest se nepodařilo načíst. HTTP {(int)response.StatusCode}.", currentVersion);
@@ -49,6 +51,17 @@ public sealed class UpdateService
                 return UpdateCheckResult.Error("Manifest obsahuje neplatný formát verze.", currentVersion);
             }
 
+            if (!Uri.TryCreate(manifest.DownloadUrl, UriKind.Absolute, out _))
+            {
+                return UpdateCheckResult.Error("Manifest obsahuje neplatnou URL balíčku.", currentVersion);
+            }
+
+            if (!string.IsNullOrWhiteSpace(manifest.MinimumVersion)
+                && !Version.TryParse(manifest.MinimumVersion, out _))
+            {
+                return UpdateCheckResult.Error("Manifest obsahuje neplatný formát minimální verze.", currentVersion);
+            }
+
             return new UpdateCheckResult
             {
                 IsUpdateAvailable = latestVersion > currentVersion,
@@ -57,7 +70,23 @@ public sealed class UpdateService
                 LatestVersion = latestVersion
             };
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
+        {
+            return UpdateCheckResult.Error($"Manifest se nepodařilo načíst: {ex.Message}", currentVersion);
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return UpdateCheckResult.Error("Načtení manifestu vypršelo.", currentVersion);
+        }
+        catch (JsonException ex)
+        {
+            return UpdateCheckResult.Error($"Manifest obsahuje neplatný JSON: {ex.Message}", currentVersion);
+        }
+        catch (NotSupportedException ex)
+        {
+            return UpdateCheckResult.Error($"Manifest používá nepodporovaný formát: {ex.Message}", currentVersion);
+        }
+        catch (UriFormatException ex)
         {
             return UpdateCheckResult.Error(ex.Message, currentVersion);
         }
@@ -65,7 +94,14 @@ public sealed class UpdateService
 
     public async Task<string> DownloadUpdateAsync(string downloadUrl, CancellationToken cancellationToken = default)
     {
-        var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(downloadUrl);
+
+        if (!Uri.TryCreate(downloadUrl, UriKind.Absolute, out var downloadUri))
+        {
+            throw new ArgumentException("URL balíčku není platná.", nameof(downloadUrl));
+        }
+
+        var fileName = Path.GetFileName(downloadUri.LocalPath);
         if (string.IsNullOrWhiteSpace(fileName))
         {
             fileName = "Diablo4.WinUI.msix";
@@ -73,11 +109,12 @@ public sealed class UpdateService
 
         var destinationPath = Path.Combine(Path.GetTempPath(), fileName);
 
-        using var response = await HttpClient.GetAsync(downloadUrl, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
+        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var target = File.Create(destinationPath);
+        await using var target = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
         await source.CopyToAsync(target, cancellationToken);
 
         return destinationPath;
@@ -85,6 +122,8 @@ public sealed class UpdateService
 
     public Task ApplyUpdateAsync(string installerPath, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!File.Exists(installerPath))
         {
             throw new FileNotFoundException("Instalační balíček nebyl nalezen.", installerPath);

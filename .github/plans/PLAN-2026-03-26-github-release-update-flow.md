@@ -2,7 +2,7 @@
 
 **Soubor:** `.github/plans/PLAN-2026-03-26-github-release-update-flow.md`  
 **Datum:** 2026-03-26  
-**Stav:** `návrh`
+**Stav:** `v realizaci`
 
 ---
 
@@ -38,13 +38,13 @@
 
 ## Kroky implementace
 
-- [ ] Založit cílový GitHub repozitář pro `Diablo4.WinUI` a nastavit remote.
-- [ ] Navrhnout finální strukturu release artefaktů a `update-manifest.json`.
-- [ ] Doplnit reálnou URL manifestu do `AppConfiguration`.
+- [x] Založit cílový GitHub repozitář pro `Diablo4.WinUI` a nastavit remote.
+- [x] Navrhnout finální strukturu release artefaktů a `update-manifest.json`.
+- [x] Doplnit reálnou URL manifestu do `AppConfiguration`.
 - [ ] Ověřit packaged publish/build scénář pro distribuční balíček.
-- [ ] Upravit `UpdateService`, pokud bude potřeba pro finální GitHub Releases workflow.
+- [x] Upravit `UpdateService`, pokud bude potřeba pro finální GitHub Releases workflow.
 - [ ] Manuálně ověřit dostupnost manifestu a stažení balíčku.
-- [ ] Zapsat výsledky a vytvořit release checklist.
+- [x] Zapsat výsledky a vytvořit release checklist.
 
 ## Dotčené soubory
 
@@ -75,3 +75,20 @@
 ## Poznámky po dokončení
 
 > Doplnit po realizaci: URL repozitáře, finální manifest URL, schema manifestu, ověřený release postup a případné zbývající kroky.
+
+---
+
+## Průběžný výsledek
+
+- GitHub remote `origin` byl nastaven na `https://github.com/PetrJukl/Diablo_4.git`.
+- Manifest URL je nastavená na `https://raw.githubusercontent.com/PetrJukl/Diablo_4/main/update-manifest.json`.
+- Do repozitáře byl přidán počáteční `update-manifest.json`.
+- Byl přidán workflow `.github/workflows/update-release-manifest.yml`, který po publikaci nebo úpravě GitHub releasu aktualizuje `update-manifest.json` podle přiloženého assetu.
+- Byl přidán `.github/release-checklist.md` pro ruční release kroky.
+
+## Review
+
+- Workflow aktuálně negeneruje instalační balíček, pouze zapisuje manifest podle publikovaného GitHub releasu.
+- Pro první ostré ověření ještě zbývá vytvořit release s reálným assetem a ověřit veřejné stažení manifestu i balíčku.
+- Lokální build řešení proběhl úspěšně.
+- V řešení nebyly nalezeny automatické testy.

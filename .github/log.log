@@ -1,0 +1,10 @@
+2026-03-28 GitHub release/update flow
+- nastaven local git remote `origin` -> https://github.com/PetrJukl/Diablo_4.git
+- `AppConfiguration` přepnuta na reálný raw manifest URL
+- `UpdateService` zpřesněna validace URL, JSON a timeout chování
+- přidán počáteční `update-manifest.json`
+- přidán workflow `.github/workflows/update-release-manifest.yml`
+- přidán `.github/release-checklist.md`
+- zbývá ověřit build a první publikovaný GitHub release s reálným assetem
+- lokální build řešení proběhl úspěšně
+- v řešení nebyly nalezeny automatické testy
