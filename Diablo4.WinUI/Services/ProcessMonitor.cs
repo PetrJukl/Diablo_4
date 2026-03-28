@@ -1,3 +1,4 @@
+using Diablo4.WinUI.Helpers;
 using Diablo4.WinUI.Models;
 using System;
 using System.Collections.Generic;
@@ -15,13 +16,19 @@ public class ProcessMonitor
 {
     private DispatcherQueueTimer? _timer;
     private DispatcherQueueTimer? _webTimer;
-    private readonly string[] _processNames;
+    private readonly HashSet<string> _processNames;
     private readonly string _filePath;
     private DateTime? _processStartTime;
     private int _weekOfYear;
     private long _lastLogPosition = 0;
     private DateTime? _firstDetectionTime;
-    
+    private CancellationTokenSource? _cancellationTokenSource;
+    private WeeklyDurations _cachedHistoricalDurations = new(TimeSpan.Zero, TimeSpan.Zero);
+    private int _cachedWeekOfYear = -1;
+    private int _cachedYear = -1;
+    private long _cachedFileLength = -1;
+    private bool _durationsDirty = true;
+
     private bool _isWebRunning = false;
     private bool _isCheckingTabs = false;
     private volatile bool _isProcessing;
@@ -32,13 +39,15 @@ public class ProcessMonitor
 
     public ProcessMonitor(string filePath, bool checkWebContent, params string[] processNames)
     {
-        _processNames = processNames;
+        _processNames = new HashSet<string>(processNames, StringComparer.OrdinalIgnoreCase);
         _filePath = filePath;
         _shouldCheckWebContent = checkWebContent;
     }
 
     public void Start(DispatcherQueue dispatcherQueue)
     {
+        _cancellationTokenSource = new CancellationTokenSource();
+
         _timer = dispatcherQueue.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(500);
         _timer.Tick += OnTimerTick;
@@ -57,98 +66,157 @@ public class ProcessMonitor
     {
         _timer?.Stop();
         _webTimer?.Stop();
+        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource?.Dispose();
+        _cancellationTokenSource = null;
     }
 
     private void OnTimerTick(DispatcherQueueTimer sender, object args)
     {
-        if (_isProcessing) return;
+        if (_isProcessing || _cancellationTokenSource is null)
+        {
+            return;
+        }
+
         _isProcessing = true;
-        Task.Run(() =>
+        var cancellationToken = _cancellationTokenSource.Token;
+
+        _ = Task.Run(() =>
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var processes = Process.GetProcesses();
-                FirstCheckProcess(processes);
-                WriteProcessDuration(processes);
+
+                try
+                {
+                    bool isAnyProcessRunning = IsAnyTrackedProcessRunning(processes);
+                    FirstCheckProcess(isAnyProcessRunning);
+                    WriteProcessDuration(isAnyProcessRunning);
+                }
+                finally
+                {
+                    foreach (var process in processes)
+                    {
+                        process.Dispose();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.LogError("Monitoring procesů selhal.", ex);
             }
             finally
             {
                 _isProcessing = false;
             }
-        });
+        }, cancellationToken);
     }
 
     private void OnWebTimerTick(DispatcherQueueTimer sender, object args)
     {
-        Task.Run(() => CheckAllOpenTabsForUdemy());
+        if (_cancellationTokenSource is null)
+        {
+            return;
+        }
+
+        var cancellationToken = _cancellationTokenSource.Token;
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CheckAllOpenTabsForUdemy();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                AppDiagnostics.LogError("Webový monitoring selhal.", ex);
+            }
+        }, cancellationToken);
     }
 
-    private void FirstCheckProcess(Process[] processes)
+    private bool IsAnyTrackedProcessRunning(Process[] processes)
     {
-        bool isAnyProcessRunning = false;
-
-        foreach (var processName in _processNames)
+        if (_isWebRunning)
         {
-            var processExists = processes.Any(x => x.ProcessName == processName);
-            if (processExists || _isWebRunning)
-            {
-                isAnyProcessRunning = true;
+            return true;
+        }
 
-                if (!_firstDetectionTime.HasValue)
-                {
-                    _firstDetectionTime = DateTime.Now;
-                }
-                else if ((DateTime.Now - _firstDetectionTime.Value).TotalMilliseconds >= 200)
-                {
-                    string dateTimeString = DateTime.Now.ToString() + Environment.NewLine;
-                    WriteToFile(dateTimeString, FileMode.Open, AccessMode.Write);
-                    _firstDetectionTime = null;
-                }
+        foreach (var process in processes)
+        {
+            if (_processNames.Contains(process.ProcessName))
+            {
+                return true;
             }
         }
 
+        return false;
+    }
+
+    private void FirstCheckProcess(bool isAnyProcessRunning)
+    {
         if (!isAnyProcessRunning)
         {
             _firstDetectionTime = null;
+            return;
+        }
+
+        if (!_firstDetectionTime.HasValue)
+        {
+            _firstDetectionTime = DateTime.Now;
+            return;
+        }
+
+        if ((DateTime.Now - _firstDetectionTime.Value).TotalMilliseconds >= 200)
+        {
+            string dateTimeString = FileHelper.FormatLastPlayedTimestamp(DateTime.Now) + Environment.NewLine;
+
+            if (TryWriteToFile(dateTimeString, FileMode.Open, FileAccess.Write))
+            {
+                _firstDetectionTime = null;
+            }
         }
     }
 
-    private void WriteProcessDuration(Process[] processes)
+    private void WriteProcessDuration(bool isAnyProcessRunning)
     {
-        bool isAnyProcessRunning = false;
-
-        foreach (var processName in _processNames)
+        if (isAnyProcessRunning)
         {
-            var processExists = processes.Any(x => x.ProcessName == processName);
-            if (processExists || _isWebRunning)
+            _isRunning = true;
+
+            if (!_processStartTime.HasValue)
             {
-                isAnyProcessRunning = true;
-                _isRunning = true;
-
-                if (!_processStartTime.HasValue)
-                {
-                    _processStartTime = DateTime.Now;
-                    _weekOfYear = GetIso8601WeekOfYear((DateTime)_processStartTime);
-                    _lastLogPosition = new FileInfo(_filePath).Length;
-                }
-                else if (_processStartTime.HasValue)
-                {
-                    var processEndTime = DateTime.Now;
-                    var duration = processEndTime - _processStartTime.Value;
-                    if (duration.TotalMilliseconds >= 200)
-                    {
-                        var logEntry = $"{_weekOfYear}||{_processStartTime.Value:dd-MM-yyyy HH:mm:ss}||{duration.TotalSeconds}\n";
-                        WriteToFileAtPosition(logEntry, _lastLogPosition);
-                    }
-                }
+                _processStartTime = DateTime.Now;
+                _weekOfYear = GetIso8601WeekOfYear((DateTime)_processStartTime);
+                _lastLogPosition = GetFileLength(_filePath);
+                _durationsDirty = true;
+                return;
             }
+
+            var processEndTime = DateTime.Now;
+            var duration = processEndTime - _processStartTime.Value;
+            if (duration.TotalMilliseconds < 200)
+            {
+                return;
+            }
+
+            var logEntry = $"{_weekOfYear}||{_processStartTime.Value:dd-MM-yyyy HH:mm:ss}||{duration.TotalSeconds}\n";
+            TryWriteToFileAtPosition(logEntry, _lastLogPosition);
+
+            return;
         }
 
-        if (!isAnyProcessRunning)
-        {
-            _processStartTime = null;
-            _isRunning = false;
-        }
+        _processStartTime = null;
+        _isRunning = false;
+        _durationsDirty = true;
     }
 
     public int GetIso8601WeekOfYear(DateTime time)
@@ -164,30 +232,40 @@ public class ProcessMonitor
 
     public WeeklyDurations GetDurations(string filePath, int actualWeekOfYear)
     {
+        int actualYear = DateTime.Now.Year;
+        long currentFileLength = GetFileLength(filePath);
+
+        if (_durationsDirty
+            || _cachedWeekOfYear != actualWeekOfYear
+            || _cachedYear != actualYear
+            || (!_processStartTime.HasValue && _cachedFileLength != currentFileLength))
+        {
+            _cachedHistoricalDurations = LoadHistoricalDurations(filePath, actualWeekOfYear, actualYear, _processStartTime);
+            _cachedWeekOfYear = actualWeekOfYear;
+            _cachedYear = actualYear;
+            _cachedFileLength = currentFileLength;
+            _durationsDirty = false;
+        }
+
+        var result = _cachedHistoricalDurations;
+
+        if (_processStartTime.HasValue)
+        {
+            result = AddActiveSessionDuration(result, actualWeekOfYear, actualYear, _processStartTime.Value);
+        }
+
+        return result;
+    }
+
+    private WeeklyDurations LoadHistoricalDurations(string filePath, int actualWeekOfYear, int actualYear, DateTime? activeSessionStartTime)
+    {
         var weeklyDurations = new TimeSpan();
         var lastWeekDuration = new TimeSpan();
-        int actualYear = DateTime.Now.Year;
         int weeksInLastYear = GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) != 1 
             ? GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) 
             : GetIso8601WeekOfYear(DateTime.Parse($"27.12.{actualYear - 1}"));
 
-        string[]? lines = null;
-        const int maxRetries = 5;
-        for (int i = 0; i < maxRetries; i++)
-        {
-            try
-            {
-                lines = File.ReadAllLines(filePath);
-                break;
-            }
-            catch (IOException) when (i < maxRetries - 1)
-            {
-                Thread.Sleep(200);
-            }
-        }
-
-        if (lines == null)
-            return new WeeklyDurations(TimeSpan.Zero, TimeSpan.Zero);
+        var lines = ReadAllLinesShared(filePath);
 
         foreach (var line in lines)
         {
@@ -197,9 +275,29 @@ public class ProcessMonitor
             {
                 continue;
             }
-            var weekOfYear = int.Parse(parts[0]);
-            var startTimeYear = DateTime.Parse(parts[1]).Year;
-            var duration = TimeSpan.FromSeconds(double.Parse(parts[2]));
+
+            if (!int.TryParse(parts[0], out var weekOfYear))
+            {
+                continue;
+            }
+
+            if (!DateTime.TryParseExact(parts[1], "dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
+            {
+                continue;
+            }
+
+            if (!FileHelper.TryParseDurationSeconds(parts[2], out var seconds))
+            {
+                continue;
+            }
+
+            var startTimeYear = startTime.Year;
+            var duration = TimeSpan.FromSeconds(seconds);
+
+            if (activeSessionStartTime.HasValue && AreSameLoggedStartTime(startTime, activeSessionStartTime.Value))
+            {
+                continue;
+            }
 
             if (weekOfYear == actualWeekOfYear && startTimeYear == actualYear)
             {
@@ -216,6 +314,39 @@ public class ProcessMonitor
         }
 
         return new WeeklyDurations(weeklyDurations, lastWeekDuration);
+    }
+
+    private WeeklyDurations AddActiveSessionDuration(WeeklyDurations durations, int actualWeekOfYear, int actualYear, DateTime activeSessionStartTime)
+    {
+        var activeDuration = DateTime.Now - activeSessionStartTime;
+        int activeWeekOfYear = GetIso8601WeekOfYear(activeSessionStartTime);
+
+        if (activeWeekOfYear == actualWeekOfYear && activeSessionStartTime.Year == actualYear)
+        {
+            return durations with { ThisWeek = durations.ThisWeek + activeDuration };
+        }
+
+        int weeksInLastYear = GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) != 1
+            ? GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}"))
+            : GetIso8601WeekOfYear(DateTime.Parse($"27.12.{actualYear - 1}"));
+
+        if (actualWeekOfYear == 1 && activeWeekOfYear == weeksInLastYear && activeSessionStartTime.Year == actualYear - 1)
+        {
+            return durations with { LastWeek = durations.LastWeek + activeDuration };
+        }
+
+        if (actualWeekOfYear != 1 && activeWeekOfYear == actualWeekOfYear - 1 && activeSessionStartTime.Year == actualYear)
+        {
+            return durations with { LastWeek = durations.LastWeek + activeDuration };
+        }
+
+        return durations;
+    }
+
+    private static bool AreSameLoggedStartTime(DateTime loggedStartTime, DateTime activeSessionStartTime)
+    {
+        return loggedStartTime.ToString("dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture)
+            == activeSessionStartTime.ToString("dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     private void CheckAllOpenTabsForUdemy()
@@ -239,65 +370,75 @@ public class ProcessMonitor
         }
     }
 
-    private void WriteToFile(string content, FileMode mode, AccessMode access)
+    private static long GetFileLength(string filePath)
     {
-        const int maxRetries = 5;
-        FileStream? stream = null;
-        for (int i = 0; i < maxRetries; i++)
+        try
         {
-            try
-            {
-                var fileAccess = access == AccessMode.Write ? FileAccess.Write : FileAccess.Read;
-                stream = new FileStream(_filePath, mode, fileAccess, FileShare.Read);
-                break;
-            }
-            catch (IOException) when (i < maxRetries - 1)
-            {
-                Thread.Sleep(50);
-            }
+            return new FileInfo(filePath).Length;
         }
-
-        if (stream == null) return;
-
-        using (stream)
-        using (var writer = new StreamWriter(stream))
+        catch (IOException ex)
         {
-            writer.Write(content);
+            AppDiagnostics.LogWarning($"Nepodařilo se získat délku souboru '{filePath}'.", ex);
+            return 0;
         }
     }
 
-    private void WriteToFileAtPosition(string content, long position)
+    private bool TryWriteToFile(string content, FileMode mode, FileAccess access)
     {
-        const int maxRetries = 5;
-        FileStream? stream = null;
-        for (int i = 0; i < maxRetries; i++)
+        try
         {
-            try
-            {
-                stream = new FileStream(_filePath, FileMode.Open, FileAccess.Write, FileShare.Read);
-                stream.Position = position;
-                break;
-            }
-            catch (IOException) when (i < maxRetries - 1)
-            {
-                Thread.Sleep(70);
-            }
+            using var stream = new FileStream(_filePath, mode, access, FileShare.ReadWrite);
+            using var writer = new StreamWriter(stream);
+            writer.Write(content);
+            writer.Flush();
+            return true;
         }
-
-        if (stream == null) return;
-
-        using (stream)
-        using (var writer = new StreamWriter(stream))
+        catch (IOException ex)
         {
+            AppDiagnostics.LogWarning("Nepodařilo se zapsat monitoring do log souboru.", ex);
+            return false;
+        }
+    }
+
+    private bool TryWriteToFileAtPosition(string content, long position)
+    {
+        try
+        {
+            using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            stream.Position = position;
+
+            using var writer = new StreamWriter(stream);
             writer.Write(content);
             writer.Flush();
             stream.SetLength(stream.Position);
+            return true;
+        }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning("Nepodařilo se aktualizovat délku běhu procesu v logu.", ex);
+            return false;
         }
     }
 
-    private enum AccessMode
+    private static string[] ReadAllLinesShared(string filePath)
     {
-        Read,
-        Write
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            var lines = new List<string>();
+
+            while (reader.ReadLine() is { } line)
+            {
+                lines.Add(line);
+            }
+
+            return [.. lines];
+        }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning($"Nepodařilo se načíst log soubor '{filePath}'.", ex);
+            return [];
+        }
     }
 }

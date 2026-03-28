@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34701.34
@@ -6,6 +6,8 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Diablo 4", "Diablo 4\Diablo 4.csproj", "{B0B54E28-084D-47B0-A8AE-19A98EE98768}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Diablo4.WinUI", "Diablo4.WinUI\Diablo4.WinUI.csproj", "{00A5E092-BCE3-4A8A-BC93-6414173E2CC7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Diablo4.WinUI.Tests", "Diablo4.WinUI.Tests\Diablo4.WinUI.Tests.csproj", "{C01200C6-8273-4E66-81C2-8B9B888D8720}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,6 +49,18 @@ Global
 		{00A5E092-BCE3-4A8A-BC93-6414173E2CC7}.Release|x86.ActiveCfg = Release|x86
 		{00A5E092-BCE3-4A8A-BC93-6414173E2CC7}.Release|x86.Build.0 = Release|x86
 		{00A5E092-BCE3-4A8A-BC93-6414173E2CC7}.Release|x86.Deploy.0 = Release|x86
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|x64.Build.0 = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Debug|x86.Build.0 = Debug|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|x64.ActiveCfg = Release|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|x64.Build.0 = Release|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|x86.ActiveCfg = Release|Any CPU
+		{C01200C6-8273-4E66-81C2-8B9B888D8720}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -55,5 +69,3 @@ Global
 		SolutionGuid = {6E007957-63C5-40EF-9DFB-F096D0D3F75F}
 	EndGlobalSection
 EndGlobal
-
-

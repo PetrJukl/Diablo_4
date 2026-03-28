@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,26 +10,67 @@ public static class ProcessHelper
 {
     public static void CloseOtherInstances(string processName)
     {
-        Task.Run(() =>
+        _ = Task.Run(() =>
         {
-            var processes = Process.GetProcessesByName(processName);
+            var currentProcess = Process.GetCurrentProcess();
+            var processes = Process.GetProcessesByName(processName)
+                .Where(process => process.Id != currentProcess.Id)
+                .OrderByDescending(process => SafeGetStartTime(process))
+                .ToArray();
 
-            if (processes.Length > 1)
+            try
             {
-                var processesToClose = processes.OrderByDescending(p => p.StartTime).Skip(1);
-
-                foreach (var process in processesToClose)
+                foreach (var process in processes)
                 {
                     try
                     {
-                        process.Kill();
+                        if (process.HasExited)
+                        {
+                            continue;
+                        }
+
+                        if (process.CloseMainWindow())
+                        {
+                            process.WaitForExit(2000);
+                            continue;
+                        }
+
+                        AppDiagnostics.LogWarning($"Jinou instanci '{process.ProcessName}' se nepodařilo korektně zavřít, protože nemá hlavní okno.");
                     }
-                    catch (Exception)
+                    catch (InvalidOperationException ex)
                     {
-                        // Process might have already exited
+                        AppDiagnostics.LogWarning("Nepodařilo se získat stav druhé instance aplikace.", ex);
+                    }
+                    catch (Win32Exception ex)
+                    {
+                        AppDiagnostics.LogWarning("Korektní zavření druhé instance aplikace selhalo.", ex);
+                    }
+                    finally
+                    {
+                        process.Dispose();
                     }
                 }
             }
+            finally
+            {
+                currentProcess.Dispose();
+            }
         });
+    }
+
+    private static DateTime SafeGetStartTime(Process process)
+    {
+        try
+        {
+            return process.StartTime;
+        }
+        catch (InvalidOperationException)
+        {
+            return DateTime.MinValue;
+        }
+        catch (Win32Exception)
+        {
+            return DateTime.MinValue;
+        }
     }
 }

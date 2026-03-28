@@ -3,8 +3,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using Windows.Graphics;
 using Windows.UI;
@@ -14,9 +16,11 @@ namespace Diablo4.WinUI.Views;
 
 public sealed partial class WeekendMotivationDialog : Window
 {
+    private static readonly ConcurrentDictionary<string, string> ExecutablePathCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly TaskCompletionSource _tcs = new();
     private readonly CancellationTokenSource _cts = new();
     private bool _isClosed;
+    private bool _isLaunchInProgress;
     private readonly List<string> _games =
     [
         "Diablo IV",
@@ -82,6 +86,12 @@ public sealed partial class WeekendMotivationDialog : Window
 
     private async void AnoButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_isLaunchInProgress || _isClosed)
+        {
+            return;
+        }
+
+        _isLaunchInProgress = true;
         string selectedGame = GamesComboBox.SelectedItem as string ?? "Diablo IV";
         string executableName = GetExecutableName(selectedGame);
         string processName = Path.GetFileNameWithoutExtension(executableName);
@@ -89,11 +99,22 @@ public sealed partial class WeekendMotivationDialog : Window
         string executablePath;
         try
         {
-            executablePath = await FindExecutablePathAsync(executableName, _cts.Token);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
+            executablePath = await FindExecutablePathAsync(executableName, timeoutCts.Token);
         }
         catch (OperationCanceledException)
         {
+            if (!_isClosed)
+            {
+                await ShowMessageAsync("Vyhledání hry bylo pøerušeno", "Nepodaøilo se vèas najít spustitelný soubor vybrané hry.");
+            }
+
             return;
+        }
+        finally
+        {
+            _isLaunchInProgress = false;
         }
 
         if (_isClosed)
@@ -150,9 +171,16 @@ public sealed partial class WeekendMotivationDialog : Window
     private static async Task<string> FindExecutablePathAsync(string executableName, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(executableName))
+        {
             return string.Empty;
+        }
 
-        return await Task.Run(() =>
+        if (ExecutablePathCache.TryGetValue(executableName, out var cachedPath) && File.Exists(cachedPath))
+        {
+            return cachedPath;
+        }
+
+        var result = await Task.Run(() =>
         {
             foreach (var root in SearchRoots)
             {
@@ -163,6 +191,13 @@ public sealed partial class WeekendMotivationDialog : Window
             }
             return string.Empty;
         }, ct);
+
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            ExecutablePathCache[executableName] = result;
+        }
+
+        return result;
     }
 
     private static string SearchDirectory(string directory, string executableName, int maxDepth, CancellationToken ct, int depth = 0)
@@ -185,11 +220,30 @@ public sealed partial class WeekendMotivationDialog : Window
         catch (OperationCanceledException) { throw; }
         catch (UnauthorizedAccessException) { }
         catch (DirectoryNotFoundException) { }
-        catch (Exception) { }
+        catch (PathTooLongException) { }
+        catch (IOException) { }
         return string.Empty;
     }
 
     private static bool IsProcessRunning(string processName) =>
         Process.GetProcessesByName(processName).Length > 0;
+
+    private async Task ShowMessageAsync(string title, string content)
+    {
+        if (_isClosed)
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = content,
+            CloseButtonText = "OK",
+            XamlRoot = Content.XamlRoot
+        };
+
+        await dialog.ShowAsync();
+    }
 }
 

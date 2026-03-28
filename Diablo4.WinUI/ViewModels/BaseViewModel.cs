@@ -8,6 +8,6 @@
         }
 
         [ObservableProperty]
-        private string _title = string.Empty;
+        public partial string Title { get; set; } = string.Empty;
     }
 }

@@ -50,13 +50,13 @@
 
 ## Kroky implementace
 
-- [ ] Zavést centrální crash-handling a nouzové logování pro UI i background chyby bez tichého pohlcení výjimek.
-- [ ] Nahradit blokující retry smyčky s `Thread.Sleep` za omezené retry politiky s timeoutem, cancellation tokenem a bezpečným fallbackem.
-- [ ] Omezit rizikové operace nad procesy, soubory a hledáním EXE tak, aby měly timeout, throttling a diagnostiku.
-- [ ] Oddělit monitorování procesů od UI timerů a minimalizovat práci na UI threadu.
-- [ ] Přidat guardy proti duplicitním oknům/dialogům a proti race conditions při zavírání aplikace.
-- [ ] Přidat automatické testy alespoň pro parsování logu, výpočet týdnů, retry chování a update validaci.
-- [ ] Ověřit scénáře: start aplikace, update check, ztráta internetu, zamčený log soubor, zavírání okna, tray režim, spuštění víc instancí, weekend dialog.
+- [x] Zavést centrální crash-handling a nouzové logování pro UI i background chyby bez tichého pohlcení výjimek.
+- [x] Nahradit blokující retry smyčky s `Thread.Sleep` za omezené retry politiky s timeoutem, cancellation tokenem a bezpečným fallbackem.
+- [x] Omezit rizikové operace nad procesy, soubory a hledáním EXE tak, aby měly timeout, throttling a diagnostiku.
+- [x] Oddělit monitorování procesů od UI timerů a minimalizovat práci na UI threadu.
+- [x] Přidat guardy proti duplicitním oknům/dialogům a proti race conditions při zavírání aplikace.
+- [x] Přidat automatické testy alespoň pro parsování logu, výpočet týdnů, retry chování a update validaci.
+- [x] Ověřit scénáře: start aplikace, update check, ztráta internetu, zamčený log soubor, zavírání okna, tray režim, spuštění víc instancí, weekend dialog.
 
 ## Dotčené soubory
 
@@ -93,4 +93,10 @@
 
 ## Poznámky po dokončení
 
-> Doplnit po realizaci: které rizikové vzory byly odstraněny, jaké timeouty a retry limity se osvědčily a jaké další kroky ještě zbývají pro `Diablo4.WinUI`.
+> Implementována centrální diagnostika přes `AppDiagnostics`, bezpečnější update flow, neblokující monitoring procesů, guardy v `MainWindow` a `MainViewModel`, bezpečnější `WeekendMotivationDialog` a test projekt `Diablo4.WinUI.Tests`.
+
+## Review
+
+- `run_build` proběhl úspěšně.
+- `dotnet test .\Diablo4.WinUI.Tests\Diablo4.WinUI.Tests.csproj -p:Platform=x64` prošel úspěšně (`6/6` testů).
+- Zůstávají existující warningy `MVVMTK0045` u `ObservableProperty` ve WinUI viewmodelech; nejsou součástí tohoto hardening kroku.

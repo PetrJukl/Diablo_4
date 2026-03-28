@@ -12,47 +12,38 @@
             <ImageBrush ImageSource="/Assets/diablo.jpeg" Stretch="UniformToFill"/>
         </Grid.Background>
 
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
         <TextBlock
             x:Name="messageLabel"
-            Grid.Row="1"
             Text="{x:Bind ViewModel.MessageText, Mode=OneWay}"
             FontSize="45"
             Foreground="White"
             TextAlignment="Center"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            MaxWidth="1333"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Width="888"
+            Height="257"
             TextWrapping="Wrap"
-            Margin="20"/>
+            Margin="360,333,0,0"/>
 
         <TextBlock
             x:Name="weekDuration"
-            Grid.Row="2"
             Text="{x:Bind ViewModel.WeekDurationText, Mode=OneWay}"
             FontSize="29"
             FontWeight="Bold"
             Foreground="White"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
-            Margin="8,20,0,0"/>
+            Margin="8,375,0,0"/>
 
         <TextBlock
             x:Name="lastWeekDuration"
-            Grid.Row="3"
             Text="{x:Bind ViewModel.LastWeekDurationText, Mode=OneWay}"
             FontSize="29"
             FontStyle="Italic"
             Foreground="White"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
-            Margin="8,20,0,0"/>
+            Margin="8,481,0,0"/>
     </Grid>
 </Window>
 

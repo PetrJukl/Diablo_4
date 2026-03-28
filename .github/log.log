@@ -16,3 +16,24 @@
 - v `.github/plans/PLAN-2026-03-28-stabilizace-a-hardening-aplikace.md` uložen návrh stabilizačního postupu
 - plán stabilizace zúžen pouze na `Diablo4.WinUI`
 - legacy složka `Diablo 4/` přidána do `.gitignore`
+- přidána centrální diagnostika `Diablo4.WinUI/Helpers/AppDiagnostics.cs`
+- `App.xaml.cs` nově zachytává UI/AppDomain/TaskScheduler výjimky a update flow neukončuje aplikaci při selhání
+- `ProcessMonitor` odstranil blokující retry smyčky a používá bezpečnější souborové operace
+- `ProcessHelper`, `MainWindow`, `MainViewModel` a `WeekendMotivationDialog` dostaly guardy a přesnější error handling
+- přidán test projekt `Diablo4.WinUI.Tests` s MSTest pokrytím pro `ProcessMonitor` a `UpdateService`
+- ověření: `run_build` úspěšný, `dotnet test .\Diablo4.WinUI.Tests\Diablo4.WinUI.Tests.csproj -p:Platform=x64` prošel 6/6
+- vizuální odpočet `MessageText` vrácen na `50 ms`, aby působil kontinuálně pro oko
+- `MVVMTK0045` warningy odstraněny převodem `ObservableProperty` fieldů na partial properties v `BaseViewModel` a `MainViewModel`
+- ověření po úpravě: build `Diablo4.WinUI` úspěšný, testy `Diablo4.WinUI.Tests` znovu prošly 6/6
+- opraven formát prvního řádku logu přes `FileHelper.FormatLastPlayedTimestamp` + zpětně kompatibilní parsování starých hodnot
+- po přepisu prvního řádku se nově přepočítává `_lastLogPosition`, takže se znovu správně zapisuje délka hraní
+- ověření po opravě odpočtu a délky hraní: `run_build` úspěšný, `dotnet test .\Diablo4.WinUI.Tests\Diablo4.WinUI.Tests.csproj -p:Platform=x64 -v minimal` prošel 6/6
+- vrácen původní formát zápisu prvního řádku logu (`DateTime.Now.ToString()`), aby odpovídal původnímu chování aplikace
+- zachován přepočet `_lastLogPosition`, aby se délka hraní zapisovala správně i po přepisu hlavičky souboru
+- `MainWindow.xaml` vrácen na původní rozložení textů podle legacy UI (`messageLabel`, `weekDuration`, `lastWeekDuration`)
+- zpřesněn parser délky hraní přes `FileHelper.TryParseDurationSeconds`, aby zvládl desetinnou čárku i tečku bez změny formátu zápisu
+- doplněny testy pro parsing délky hraní s `,` i `.` a build/test ověření po změně
+- `ProcessMonitor.GetDurations` už neprovádí plný re-scan logu každou sekundu; historická data cachuje a aktuální session dopočítává živě z `_processStartTime`
+- tím se vrátil okamžitý náběh aktuálního času hraní bez čekání na opakované parsování velkého log souboru
+- opraven `ProcessMonitor`: `_lastLogPosition` se po přepisu prvního řádku už neposouvá na konec souboru, takže jedna session znovu přepisuje jeden řádek místo řetězení duplicit
+- vrácen původní formát zápisu délky session (`duration.TotalSeconds` přes aktuální kulturu) pro kompatibilitu s historickým logem

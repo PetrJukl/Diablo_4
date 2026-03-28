@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
     private AppWindow? _appWindow;
     private TaskbarIcon? _trayIcon;
     private bool _isInitialized;
+    private bool _isClosed;
     private bool _isExitRequested;
     private bool _isWeekendMotivationOpen;
     private bool _isTrayAvailable;
@@ -32,12 +33,13 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        ViewModel = new MainViewModel();
         InitializeComponent();
+        Bindings.Update();
 
         Title = "Kontrola pařby";
         ExitApplicationCommand = new RelayCommand(ExitApplication);
         RestoreWindowCommand = new RelayCommand(RestoreWindow);
-        ViewModel = new MainViewModel();
         ViewModel.WeekendMotivationRequested += ViewModel_WeekendMotivationRequested;
 
         Activated += MainWindow_Activated;
@@ -76,6 +78,11 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
     {
+        if (_isClosed)
+        {
+            return;
+        }
+
         if (_isInitialized)
         {
             if (ViewModel.IsProcessRunning)
@@ -101,7 +108,7 @@ public sealed partial class MainWindow : Window
 
     private void ViewModel_ProcessRunningStateChanged(object? sender, bool isRunning)
     {
-        if (!isRunning)
+        if (!isRunning || _isClosed)
         {
             return;
         }
@@ -111,6 +118,11 @@ public sealed partial class MainWindow : Window
 
     private async void ViewModel_WeekendMotivationRequested(object? sender, EventArgs e)
     {
+        if (_isWeekendMotivationOpen || _isClosed)
+        {
+            return;
+        }
+
         _isWeekendMotivationOpen = true;
 
         var window = new WeekendMotivationDialog();
@@ -119,11 +131,15 @@ public sealed partial class MainWindow : Window
         {
             await window.ShowAndWaitAsync();
         }
+        catch (InvalidOperationException ex)
+        {
+            AppDiagnostics.LogError("Weekend dialog skončil v neplatném stavu.", ex);
+        }
         finally
         {
             _isWeekendMotivationOpen = false;
 
-            if (ViewModel.IsProcessRunning)
+            if (!_isClosed && ViewModel.IsProcessRunning)
             {
                 DispatcherQueue.TryEnqueue(HideToTrayOrMinimize);
             }
@@ -132,12 +148,22 @@ public sealed partial class MainWindow : Window
 
     private void ExitApplication()
     {
+        if (_isClosed)
+        {
+            return;
+        }
+
         _isExitRequested = true;
         Close();
     }
 
     private void RestoreWindow()
     {
+        if (_isClosed)
+        {
+            return;
+        }
+
         if (_isTrayAvailable)
         {
             WindowExtensions.Show(this);
@@ -161,7 +187,7 @@ public sealed partial class MainWindow : Window
 
     private void HideToTrayOrMinimize()
     {
-        if (_isWeekendMotivationOpen)
+        if (_isWeekendMotivationOpen || _isClosed)
         {
             return;
         }
@@ -177,7 +203,7 @@ public sealed partial class MainWindow : Window
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_isExitRequested || !_isTrayAvailable)
+        if (_isClosed || _isExitRequested || !_isTrayAvailable)
         {
             return;
         }
@@ -209,7 +235,7 @@ public sealed partial class MainWindow : Window
         }
         catch (COMException ex)
         {
-            Debug.WriteLine(ex);
+            AppDiagnostics.LogWarning("Inicializace tray ikony selhala, aplikace poběží bez tray režimu.", ex);
             _trayIcon = null;
             return false;
         }
@@ -244,6 +270,7 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        _isClosed = true;
         ViewModel.Cleanup();
         ViewModel.WeekendMotivationRequested -= ViewModel_WeekendMotivationRequested;
         ViewModel.ProcessRunningStateChanged -= ViewModel_ProcessRunningStateChanged;

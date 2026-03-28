@@ -18,22 +18,31 @@ public partial class App : Application
 
     public App()
     {
+        UnhandledException += App_UnhandledException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         InitializeComponent();
+    }
+
+    private static void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        AppDiagnostics.LogError("Neošetřená UI výjimka.", e.Exception);
     }
 
     private static void CurrentDomain_UnhandledException(object sender, System.UnhandledExceptionEventArgs e)
     {
         if (e.ExceptionObject is Exception ex)
         {
+            AppDiagnostics.LogError("Neošetřená AppDomain výjimka.", ex);
             LogStartupException("AppDomain.UnhandledException", ex);
         }
     }
 
     private static void TaskScheduler_UnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
+        AppDiagnostics.LogError("Neošetřená TaskScheduler výjimka.", e.Exception);
         LogStartupException("TaskScheduler.UnobservedTaskException", e.Exception);
+        e.SetObserved();
     }
 
     private static void LogStartupException(string source, Exception ex)
@@ -59,12 +68,39 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            AppDiagnostics.LogError("Inicializace hlavního okna selhala.", ex);
             LogStartupException("App.OnLaunched", ex);
             throw;
         }
 
+        await TryRunUpdateFlowAsync();
+    }
+
+    private static async Task TryRunUpdateFlowAsync()
+    {
+        if (MainWindow is null)
+        {
+            return;
+        }
+
         var updateService = new UpdateService(AppConfiguration.GitHubUpdateManifestUrl);
-        var updateResult = await updateService.CheckForUpdatesAsync();
+        UpdateCheckResult updateResult;
+
+        try
+        {
+            updateResult = await updateService.CheckForUpdatesAsync();
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Kontrola aktualizací selhala.", ex);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(updateResult.ErrorMessage))
+        {
+            AppDiagnostics.LogWarning($"Kontrola aktualizací skončila chybou: {updateResult.ErrorMessage}");
+        }
+
         if (!updateResult.IsUpdateAvailable || updateResult.Manifest is null || MainWindow.DialogRoot.XamlRoot is null)
         {
             return;
@@ -85,8 +121,29 @@ public partial class App : Application
             return;
         }
 
-        await updateService.DownloadAndInstallAsync(updateResult.Manifest);
-        MainWindow.Close();
+        try
+        {
+            await updateService.DownloadAndInstallAsync(updateResult.Manifest);
+            MainWindow.Close();
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Stažení nebo instalace aktualizace selhalo.", ex);
+            await ShowUpdateFailureDialogAsync(MainWindow.DialogRoot.XamlRoot);
+        }
+    }
+
+    private static async Task ShowUpdateFailureDialogAsync(Microsoft.UI.Xaml.XamlRoot xamlRoot)
+    {
+        var dialog = new ContentDialog
+        {
+            XamlRoot = xamlRoot,
+            Title = "Aktualizaci se nepodařilo nainstalovat",
+            Content = "Kontrola nebo instalace aktualizace selhala. Aplikace bude pokračovat bez aktualizace.",
+            CloseButtonText = "OK"
+        };
+
+        await dialog.ShowAsync();
     }
 
     private static UIElement BuildUpdateDialogContent(UpdateCheckResult updateResult)

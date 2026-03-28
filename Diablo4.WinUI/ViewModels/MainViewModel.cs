@@ -4,7 +4,6 @@ using Diablo4.WinUI.Models;
 using Diablo4.WinUI.Services;
 using Microsoft.UI.Dispatching;
 using System;
-using System.Diagnostics;
 using System.IO;
 
 namespace Diablo4.WinUI.ViewModels;
@@ -16,15 +15,16 @@ public partial class MainViewModel : ObservableObject
     private DispatcherQueueTimer? _messageUpdateTimer;
     private DispatcherQueueTimer? _statsUpdateTimer;
     private bool _lastKnownProcessRunningState;
+    private bool _isUpdatingStats;
 
     [ObservableProperty]
-    private string _messageText = "Text";
+    public partial string MessageText { get; set; } = "Text";
 
     [ObservableProperty]
-    private string _weekDurationText = "Doba pařby";
+    public partial string WeekDurationText { get; set; } = "Doba pařby";
 
     [ObservableProperty]
-    private string _lastWeekDurationText = "Doba pařby minulý týden";
+    public partial string LastWeekDurationText { get; set; } = "Doba pařby minulý týden";
 
     private TimeSpan _totalDuration = new TimeSpan();
     private bool _isWeekend = false;
@@ -40,15 +40,18 @@ public partial class MainViewModel : ObservableObject
 
     public void Initialize(DispatcherQueue dispatcherQueue)
     {
+        if (_processMonitor is not null)
+        {
+            return;
+        }
+
         LoadCachedLastPlayedDateTime();
 
-        // Start message update timer (50ms)
         _messageUpdateTimer = dispatcherQueue.CreateTimer();
         _messageUpdateTimer.Interval = TimeSpan.FromMilliseconds(50);
         _messageUpdateTimer.Tick += UpdateMessageTimerTick;
         _messageUpdateTimer.Start();
 
-        // Initialize process monitor
         bool shouldCheckWeb = MachineContextHelper.ShouldCheckWebContent();
         _processMonitor = new ProcessMonitor(
             _filePath,
@@ -66,9 +69,8 @@ public partial class MainViewModel : ObservableObject
         );
         _processMonitor.Start(dispatcherQueue);
 
-        // Start stats update timer (800ms)
         _statsUpdateTimer = dispatcherQueue.CreateTimer();
-        _statsUpdateTimer.Interval = TimeSpan.FromMilliseconds(800);
+        _statsUpdateTimer.Interval = TimeSpan.FromSeconds(1);
         _statsUpdateTimer.Tick += UpdateStatsTimerTick;
         _statsUpdateTimer.Start();
     }
@@ -82,12 +84,17 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateStatsTimerTick(DispatcherQueueTimer sender, object args)
     {
-        if (_processMonitor == null) return;
+        if (_processMonitor == null || _isUpdatingStats)
+        {
+            return;
+        }
 
-        LoadCachedLastPlayedDateTime();
+        _isUpdatingStats = true;
 
         try
         {
+            LoadCachedLastPlayedDateTime();
+
             int currentWeekOfYear = _processMonitor.GetIso8601WeekOfYear(DateTime.Now);
             var durations = _processMonitor.GetDurations(_filePath, currentWeekOfYear);
 
@@ -117,24 +124,46 @@ public partial class MainViewModel : ObservableObject
             CheckWeekendMotivation();
             NotifyProcessRunningState(_processMonitor.IsRunning);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            Debug.WriteLine($"[UpdateStatsTimerTick] {ex}");
+            AppDiagnostics.LogWarning("Nepodařilo se načíst statistiky hraní.", ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AppDiagnostics.LogError("Aktualizace statistik skončila v neplatném stavu.", ex);
+        }
+        finally
+        {
+            _isUpdatingStats = false;
         }
     }
 
     private void LoadCachedLastPlayedDateTime()
     {
-        if (!File.Exists(_filePath)) return;
+        if (!File.Exists(_filePath))
+        {
+            return;
+        }
+
         try
         {
             using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(stream);
             string? firstLine = reader.ReadLine();
-            if (DateTime.TryParse(firstLine, out DateTime dt))
+
+            if (FileHelper.TryParseLastPlayedTimestamp(firstLine, out DateTime dt))
+            {
                 _cachedLastPlayedDateTime = dt;
+            }
         }
-        catch (IOException) { }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning("Nepodařilo se načíst poslední čas hraní.", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning("Přístup k log souboru byl odmítnut.", ex);
+        }
     }
 
     private void CheckWeekendMotivation()
@@ -166,6 +195,17 @@ public partial class MainViewModel : ObservableObject
     {
         _messageUpdateTimer?.Stop();
         _statsUpdateTimer?.Stop();
+        if (_messageUpdateTimer is not null)
+        {
+            _messageUpdateTimer.Tick -= UpdateMessageTimerTick;
+        }
+
+        if (_statsUpdateTimer is not null)
+        {
+            _statsUpdateTimer.Tick -= UpdateStatsTimerTick;
+        }
+
         _processMonitor?.Stop();
+        _processMonitor = null;
     }
 }

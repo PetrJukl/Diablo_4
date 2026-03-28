@@ -107,14 +107,22 @@ public sealed class UpdateService
             fileName = "Diablo4.WinUI.msix";
         }
 
-        var destinationPath = Path.Combine(Path.GetTempPath(), fileName);
+        var destinationPath = Path.Combine(
+            Path.GetTempPath(),
+            $"{Path.GetFileNameWithoutExtension(fileName)}-{Guid.NewGuid():N}{Path.GetExtension(fileName)}");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using var target = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await using var target = new FileStream(destinationPath, new FileStreamOptions
+        {
+            Access = FileAccess.Write,
+            Mode = FileMode.CreateNew,
+            Share = FileShare.None,
+            Options = FileOptions.Asynchronous
+        });
         await source.CopyToAsync(target, cancellationToken);
 
         return destinationPath;
@@ -139,6 +147,8 @@ public sealed class UpdateService
 
     public async Task DownloadAndInstallAsync(UpdateManifest manifest, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(manifest);
+
         var installerPath = await DownloadUpdateAsync(manifest.DownloadUrl, cancellationToken);
         await ApplyUpdateAsync(installerPath, cancellationToken);
     }

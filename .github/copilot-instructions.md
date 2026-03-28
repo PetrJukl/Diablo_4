@@ -1,5 +1,6 @@
 ﻿# Globální GitHub Copilot Instrukce
 - Používej ověřené řešení, používej MCP servery, dokumentaci, github, když řešení neexistuje, tak ho vymysli.
+- Bez explicitního schválení uživatelem nikdy neměň logiku kódu, význam metod, formát dat ani výsledné chování.
 - Destruktivní operace jako mazaní souborů, nebo adresářů pouze po schválení uživatelem.
 
 ## Jazyk komunikace
