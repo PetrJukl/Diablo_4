@@ -43,10 +43,22 @@ jobs:
         shell: pwsh
         run: .\installer\build-installer.ps1 -Version '${{ steps.version.outputs.value }}'
 
+      - name: Resolve installer asset
+        id: installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path 'artifacts/installer' -Filter '*.exe' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          if ($null -eq $installer) {
+              throw 'Build nevytvořil žádný `.exe` installer v `artifacts/installer`.'
+          }
+
+          "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/installer/*.exe
+          files: ${{ steps.installer.outputs.path }}
           generate_release_notes: true
           fail_on_unmatched_files: true
 
@@ -72,15 +84,13 @@ jobs:
           git fetch origin $defaultBranch --depth=1
           git switch -C $defaultBranch "origin/$defaultBranch"
 
-          $manifest = [ordered]@{
-              LatestVersion = '${{ steps.version.outputs.value }}'
-              DownloadUrl = [string]$asset.browser_download_url
-              ReleaseNotes = [string]$release.body
-              MinimumVersion = ''
-              ReleaseDate = [string]$release.published_at
-          }
-
-          $manifest | ConvertTo-Json | Set-Content -Path 'update-manifest.json' -Encoding utf8NoBOM
+          ./.github/scripts/Write-UpdateManifest.ps1 `
+              -Version '${{ steps.version.outputs.value }}' `
+              -DownloadUrl ([string]$asset.browser_download_url) `
+              -ReleaseNotes ([string]$release.body) `
+              -ReleaseDate ([string]$release.published_at) `
+              -InstallerPath '${{ steps.installer.outputs.path }}' `
+              -OutputPath 'update-manifest.json'
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

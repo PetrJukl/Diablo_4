@@ -21,11 +21,13 @@ jobs:
 
       - name: Update `update-manifest.json`
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json -Depth 100
           $release = $event.release
           $assets = @($release.assets)
-          $supportedExtensions = '.exe', '.msix', '.msixbundle', '.appinstaller', '.zip'
+          $supportedExtensions = '.exe', '.msi', '.msix', '.appinstaller'
           $selectedAsset = $null
 
           foreach ($extension in $supportedExtensions) {
@@ -36,7 +38,7 @@ jobs:
           }
 
           if ($null -eq $selectedAsset) {
-              throw 'Release neobsahuje podporovaný instalační asset (.exe, .msix, .msixbundle, .appinstaller, .zip).'
+              throw 'Release neobsahuje podporovaný instalační asset (.exe, .msi, .msix, .appinstaller).'
           }
 
           $versionText = [string]$release.tag_name
@@ -55,15 +57,22 @@ jobs:
               $publishedAt = [DateTime]::UtcNow.ToString('O')
           }
 
-          $manifest = [ordered]@{
-              LatestVersion = $parsedVersion.ToString()
-              DownloadUrl = [string]$selectedAsset.browser_download_url
-              ReleaseNotes = [string]$release.body
-              MinimumVersion = ''
-              ReleaseDate = $publishedAt
+          $headers = @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/octet-stream'
+              'User-Agent' = 'GitHub Actions'
           }
 
-          $manifest | ConvertTo-Json | Set-Content -Path 'update-manifest.json' -Encoding utf8NoBOM
+          $assetPath = Join-Path $env:RUNNER_TEMP ([string]$selectedAsset.name)
+          Invoke-WebRequest -Uri ([string]$selectedAsset.browser_download_url) -OutFile $assetPath -Headers $headers
+
+          ./.github/scripts/Write-UpdateManifest.ps1 `
+              -Version $parsedVersion.ToString() `
+              -DownloadUrl ([string]$selectedAsset.browser_download_url) `
+              -ReleaseNotes ([string]$release.body) `
+              -ReleaseDate $publishedAt `
+              -InstallerPath $assetPath `
+              -OutputPath 'update-manifest.json'
 
       - name: Commit updated manifest
         shell: pwsh

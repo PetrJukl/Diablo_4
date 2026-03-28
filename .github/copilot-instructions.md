@@ -1,4 +1,6 @@
 ﻿# Globální GitHub Copilot Instrukce
+
+## Obecné pokyny
 - Používej ověřené řešení, používej MCP servery, dokumentaci, github, když řešení neexistuje, tak ho vymysli.
 - Bez explicitního schválení uživatelem nikdy neměň logiku kódu, význam metod, formát dat ani výsledné chování.
 - Destruktivní operace jako mazaní souborů, nebo adresářů pouze po schválení uživatelem.
@@ -41,14 +43,17 @@
 **4+ souborů / refactor / změny API / závislosti / konfigurace = plán do souboru**
 - Vždy nejdřív plán jako soubor ve složce `.github/plans/` a až po schválení implementace.
 
-### Ověrení před označením hotovo
+### Ověření před označením hotovo
 - Nikdy neoznačuj úkol za hotový bez důkazu, že funguje.
-- Spusť testy, jestli exiatují.
+- Spusť testy, jestli existují.
 
 ### Autonomní bug fixing
 - Vezmi logy, chyby a failing testy a oprav je.
 - Minimalizuj přepínání kontextu od uživatele.
 - U failing CI testu přejdi rovnou k diagnostice a opravě.
+
+### Vysvětlování git konfliktů
+- Při vysvětlování git konfliktů a vedlejších efektů změn nejdřív jasně uveď původ změny (lokální editace vs. CI/workflow) a neplést je dohromady.
 
 ## Strategie agentů
 - Pro návrhy složitých integrací systémů (API i bez API) použij specializovaný profil `.github/Agents/integration-architect.md`.
