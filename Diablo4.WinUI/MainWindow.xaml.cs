@@ -126,6 +126,12 @@ public sealed partial class MainWindow : Window
 
         var window = new WeekendMotivationDialog();
 
+        void closeWeekendWindow(object s, WindowEventArgs a)
+        {
+            try { window.Close(); } catch (InvalidOperationException) { }
+        }
+        Closed += closeWeekendWindow;
+
         try
         {
             await window.ShowAndWaitAsync();
@@ -136,6 +142,7 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            Closed -= closeWeekendWindow;
             _isWeekendMotivationOpen = false;
 
             if (!_isClosed && ViewModel.IsProcessRunning)
