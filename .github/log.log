@@ -52,3 +52,12 @@
 - další stabilizační oprava: programatické zavírání `WeekendMotivationDialog` nově používá `RequestClose()`, které nejdřív zavře `ComboBox` popup a `Close()` odloží do UI fronty
 - tím se omezuje WinUI crash při destrukci víkendového okna v době, kdy má otevřený popup nebo probíhá citlivý UI přechod
 - ověření po úpravě zavírání: `run_build` úspěšný, `Diablo4.WinUI.Tests.dll` prošel 9/9 testů
+- sjednocen název výsledného spustitelného souboru na `KontrolaParby.exe` přes `AssemblyName` v `Diablo4.WinUI.csproj`
+- installer `installer/Diablo4.WinUI.iss` i skript `installer/build-installer.ps1` nově pracují s `KontrolaParby.exe` místo `Diablo4.WinUI.exe`
+- ověření po sjednocení názvu: `run_build` úspěšný, `Diablo4.WinUI.Tests.dll` prošel 9/9 testů a v repu nezůstaly reference na `Diablo4.WinUI.exe`
+- update flow zůstal automatický, ale `UpdateService` už nestahuje installer do `%TEMP%` pod náhodným GUID názvem
+- nový cíl downloadu je stabilní složka `LocalApplicationData\KontrolaParby\Updates` a název souboru se bere přímo z release URL
+- doplněn MSTest pro ověření, že `DownloadUpdateAsync` ukládá installer do nové update složky; ověření po změně: `run_build` úspěšný, testy `Diablo4.WinUI.Tests.dll` prošly 10/10
+- adresář `LocalApplicationData\KontrolaParby\Updates` se nově ponechává, ale `UpdateService` při startu a před novým downloadem maže staré soubory uvnitř
+- stejný název installeru se už nepovažuje za kolizi; download používá `FileMode.Create`, takže aktuální balíček přepíše předchozí soubor stejného jména
+- doplněn MSTest pro ověření smazání starého installeru a přepsání aktuálního; ověření po změně: `run_build` úspěšný, testy `Diablo4.WinUI.Tests.dll` prošly 11/11

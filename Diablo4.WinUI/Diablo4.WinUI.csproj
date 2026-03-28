@@ -16,6 +16,7 @@
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>KontrolaParby</AssemblyName>
         <RootNamespace>Diablo4.WinUI</RootNamespace>
 
         <!-- App Options -->

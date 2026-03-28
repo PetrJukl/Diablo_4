@@ -12,7 +12,7 @@
 
 #define AppName "Kontrola pařby"
 #define AppPublisher "Petr Jukl"
-#define AppExeName "Diablo4.WinUI.exe"
+#define AppExeName "KontrolaParby.exe"
 
 [Setup]
 AppId={{A82D56BB-A8C6-4D8F-8B28-D0A8A7D9250E}

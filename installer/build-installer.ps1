@@ -37,7 +37,7 @@ else {
 
 dotnet publish $projectPath -c Release -p:PublishProfile=$publishProfile -p:Version=$Version -p:AssemblyVersion=$Version -p:FileVersion=$Version -p:InformationalVersion=$Version
 
-$mainExecutable = Join-Path $publishDir 'Diablo4.WinUI.exe'
+$mainExecutable = Join-Path $publishDir 'KontrolaParby.exe'
 if (-not (Test-Path $mainExecutable)) {
     throw "Publish výstup neobsahuje '$mainExecutable'."
 }

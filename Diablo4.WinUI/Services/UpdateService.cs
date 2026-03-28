@@ -1,3 +1,4 @@
+using Diablo4.WinUI.Helpers;
 using Diablo4.WinUI.Models;
 using System;
 using System.Diagnostics;
@@ -13,12 +14,16 @@ namespace Diablo4.WinUI.Services;
 public sealed class UpdateService
 {
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private const string DefaultInstallerFileName = "KontrolaParbySetup.exe";
+    private const string UpdatesDirectoryName = "Updates";
+    private const string UpdatesRootDirectoryName = "KontrolaParby";
     private readonly string _manifestUrl;
 
     public UpdateService(string manifestUrl)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(manifestUrl);
         _manifestUrl = manifestUrl;
+        CleanupDownloadedInstallers();
     }
 
     public async Task<UpdateCheckResult> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
@@ -101,15 +106,8 @@ public sealed class UpdateService
             throw new ArgumentException("URL balíčku není platná.", nameof(downloadUrl));
         }
 
-        var fileName = Path.GetFileName(downloadUri.LocalPath);
-        if (string.IsNullOrWhiteSpace(fileName))
-        {
-            fileName = "KontrolaParbySetup.exe";
-        }
-
-        var destinationPath = Path.Combine(
-            Path.GetTempPath(),
-            $"{Path.GetFileNameWithoutExtension(fileName)}-{Guid.NewGuid():N}{Path.GetExtension(fileName)}");
+        var destinationPath = GetDownloadDestinationPath(downloadUri);
+        CleanupDownloadedInstallers(destinationPath);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -119,7 +117,7 @@ public sealed class UpdateService
         await using var target = new FileStream(destinationPath, new FileStreamOptions
         {
             Access = FileAccess.Write,
-            Mode = FileMode.CreateNew,
+            Mode = FileMode.Create,
             Share = FileShare.None,
             Options = FileOptions.Asynchronous
         });
@@ -157,5 +155,57 @@ public sealed class UpdateService
     private static Version GetCurrentVersion()
     {
         return Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0, 0);
+    }
+
+    private static string GetDownloadDestinationPath(Uri downloadUri)
+    {
+        ArgumentNullException.ThrowIfNull(downloadUri);
+
+        var updatesDirectory = GetUpdatesDirectoryPath();
+        Directory.CreateDirectory(updatesDirectory);
+
+        var fileName = Path.GetFileName(downloadUri.LocalPath);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = DefaultInstallerFileName;
+        }
+
+        return Path.Combine(updatesDirectory, fileName);
+    }
+
+    private static string GetUpdatesDirectoryPath()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            UpdatesRootDirectoryName,
+            UpdatesDirectoryName);
+    }
+
+    private static void CleanupDownloadedInstallers(string? preservedInstallerPath = null)
+    {
+        var updatesDirectory = GetUpdatesDirectoryPath();
+        Directory.CreateDirectory(updatesDirectory);
+
+        foreach (var filePath in Directory.GetFiles(updatesDirectory))
+        {
+            if (!string.IsNullOrWhiteSpace(preservedInstallerPath)
+                && string.Equals(filePath, preservedInstallerPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (IOException ex)
+            {
+                AppDiagnostics.LogWarning($"Nepodařilo se smazat starý update soubor '{filePath}'.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                AppDiagnostics.LogWarning($"Přístup ke smazání starého update souboru '{filePath}' byl odmítnut.", ex);
+            }
+        }
     }
 }
