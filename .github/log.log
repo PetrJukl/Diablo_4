@@ -61,3 +61,5 @@
 - adresář `LocalApplicationData\KontrolaParby\Updates` se nově ponechává, ale `UpdateService` při startu a před novým downloadem maže staré soubory uvnitř
 - stejný název installeru se už nepovažuje za kolizi; download používá `FileMode.Create`, takže aktuální balíček přepíše předchozí soubor stejného jména
 - doplněn MSTest pro ověření smazání starého installeru a přepsání aktuálního; ověření po změně: `run_build` úspěšný, testy `Diablo4.WinUI.Tests.dll` prošly 11/11
+- update adresář sjednocen z `LocalApplicationData\KontrolaParby\Updates` na `LocalApplicationData\Diablo Log\Updates`, aby byl pod stejným kořenem jako aplikační logy
+- upraveny explicitní očekávané cesty v `Diablo4.WinUI.Tests/Services/UpdateServiceTests.cs`; ověření po změně: relevantní testy `UpdateServiceTests` prošly 7/7 a `run_build` byl úspěšný

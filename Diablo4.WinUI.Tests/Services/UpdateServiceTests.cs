@@ -60,7 +60,7 @@ public class UpdateServiceTests
 
             var expectedDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "KontrolaParby",
+                "Diablo Log",
                 "Updates");
 
             Assert.AreEqual(Path.Combine(expectedDirectory, fileName), downloadedPath, ignoreCase: true);
@@ -76,7 +76,7 @@ public class UpdateServiceTests
     {
         var updatesDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "KontrolaParby",
+            "Diablo Log",
             "Updates");
         Directory.CreateDirectory(updatesDirectory);
 

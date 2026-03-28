@@ -17,7 +17,7 @@ public sealed class UpdateService
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
     private const string DefaultInstallerFileName = "KontrolaParbySetup.exe";
     private const string UpdatesDirectoryName = "Updates";
-    private const string UpdatesRootDirectoryName = "KontrolaParby";
+    private const string UpdatesRootDirectoryName = "Diablo Log";
     private readonly string _manifestUrl;
 
     public UpdateService(string manifestUrl)
