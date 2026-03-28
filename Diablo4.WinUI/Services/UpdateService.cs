@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,15 +31,22 @@ public sealed class UpdateService
     {
         var currentVersion = GetCurrentVersion();
 
-        if (!Uri.TryCreate(_manifestUrl, UriKind.Absolute, out var manifestUri))
+        if (!UpdateSourcePolicy.TryCreateTrustedManifestUri(_manifestUrl, out var manifestUri, out var manifestUriErrorMessage))
         {
-            return UpdateCheckResult.Error("GitHub manifest URL není platná.", currentVersion);
+            return UpdateCheckResult.Error(manifestUriErrorMessage, currentVersion);
         }
 
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, manifestUri);
             using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (response.RequestMessage?.RequestUri is not { } finalManifestUri
+                || !UpdateSourcePolicy.IsTrustedManifestUri(finalManifestUri))
+            {
+                return UpdateCheckResult.Error("Manifest byl přesměrován na nedůvěryhodný zdroj.", currentVersion);
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 return UpdateCheckResult.Error($"Manifest se nepodařilo načíst. HTTP {(int)response.StatusCode}.", currentVersion);
@@ -56,15 +64,20 @@ public sealed class UpdateService
                 return UpdateCheckResult.Error("Manifest obsahuje neplatný formát verze.", currentVersion);
             }
 
-            if (!Uri.TryCreate(manifest.DownloadUrl, UriKind.Absolute, out _))
+            if (!UpdateSourcePolicy.TryCreateTrustedDownloadUri(manifest.DownloadUrl, out _, out var downloadUriErrorMessage))
             {
-                return UpdateCheckResult.Error("Manifest obsahuje neplatnou URL balíčku.", currentVersion);
+                return UpdateCheckResult.Error(downloadUriErrorMessage, currentVersion);
             }
 
             if (!string.IsNullOrWhiteSpace(manifest.MinimumVersion)
                 && !Version.TryParse(manifest.MinimumVersion, out _))
             {
                 return UpdateCheckResult.Error("Manifest obsahuje neplatný formát minimální verze.", currentVersion);
+            }
+
+            if (!UpdateSourcePolicy.IsValidSha256(manifest.Sha256))
+            {
+                return UpdateCheckResult.Error("Manifest obsahuje neplatný SHA-256 otisk balíčku.", currentVersion);
             }
 
             return new UpdateCheckResult
@@ -101,9 +114,9 @@ public sealed class UpdateService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(downloadUrl);
 
-        if (!Uri.TryCreate(downloadUrl, UriKind.Absolute, out var downloadUri))
+        if (!UpdateSourcePolicy.TryCreateTrustedDownloadUri(downloadUrl, out var downloadUri, out var downloadUriErrorMessage))
         {
-            throw new ArgumentException("URL balíčku není platná.", nameof(downloadUrl));
+            throw new ArgumentException(downloadUriErrorMessage, nameof(downloadUrl));
         }
 
         var destinationPath = GetDownloadDestinationPath(downloadUri);
@@ -112,6 +125,13 @@ public sealed class UpdateService
         using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
         using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
+
+        if (response.RequestMessage?.RequestUri is not { } finalDownloadUri
+            || !UpdateSourcePolicy.IsTrustedDownloadUri(finalDownloadUri)
+            || !UpdateSourcePolicy.HasSupportedInstallerExtension(finalDownloadUri))
+        {
+            throw new InvalidOperationException("Stažený balíček pochází z nedůvěryhodného zdroje.");
+        }
 
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var target = new FileStream(destinationPath, new FileStreamOptions
@@ -122,6 +142,13 @@ public sealed class UpdateService
             Options = FileOptions.Asynchronous
         });
         await source.CopyToAsync(target, cancellationToken);
+        await target.FlushAsync(cancellationToken);
+
+        var downloadedInstaller = new FileInfo(destinationPath);
+        if (!downloadedInstaller.Exists || downloadedInstaller.Length == 0)
+        {
+            throw new IOException("Stažený instalační balíček je prázdný nebo nebyl vytvořen.");
+        }
 
         return destinationPath;
     }
@@ -135,11 +162,21 @@ public sealed class UpdateService
             throw new FileNotFoundException("Instalační balíček nebyl nalezen.", installerPath);
         }
 
-        Process.Start(new ProcessStartInfo(installerPath)
+        if (!UpdateSourcePolicy.HasSupportedInstallerExtension(installerPath))
+        {
+            throw new InvalidOperationException("Instalační balíček má nepodporovanou příponu.");
+        }
+
+        var startedProcess = Process.Start(new ProcessStartInfo(installerPath)
         {
             WorkingDirectory = Path.GetDirectoryName(installerPath),
             UseShellExecute = true
         });
+
+        if (startedProcess is null)
+        {
+            throw new InvalidOperationException("Instalační balíček se nepodařilo spustit.");
+        }
 
         return Task.CompletedTask;
     }
@@ -149,7 +186,25 @@ public sealed class UpdateService
         ArgumentNullException.ThrowIfNull(manifest);
 
         var installerPath = await DownloadUpdateAsync(manifest.DownloadUrl, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(manifest.Sha256))
+        {
+            await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, cancellationToken);
+        }
+
         await ApplyUpdateAsync(installerPath, cancellationToken);
+    }
+
+    private static async Task VerifyInstallerChecksumAsync(string installerPath, string expectedSha256, CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(installerPath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken);
+        var actualSha256 = Convert.ToHexString(hashBytes);
+
+        if (!string.Equals(actualSha256, expectedSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("Stažený instalační balíček neodpovídá očekávanému SHA-256 otisku.");
+        }
     }
 
     private static Version GetCurrentVersion()
@@ -160,6 +215,11 @@ public sealed class UpdateService
     private static string GetDownloadDestinationPath(Uri downloadUri)
     {
         ArgumentNullException.ThrowIfNull(downloadUri);
+
+        if (!UpdateSourcePolicy.HasSupportedInstallerExtension(downloadUri))
+        {
+            throw new InvalidOperationException("URL instalačního balíčku používá nepodporovanou příponu.");
+        }
 
         var updatesDirectory = GetUpdatesDirectoryPath();
         Directory.CreateDirectory(updatesDirectory);

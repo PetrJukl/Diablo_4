@@ -2,7 +2,7 @@
 
 **Soubor:** `.github/plans/PLAN-2026-03-28-hardening-stability-a-testy.md`  
 **Datum:** 2026-03-28  
-**Stav:** `návrh`
+**Stav:** `dokončeno`
 
 ---
 
@@ -60,16 +60,16 @@
 
 ## Kroky implementace
 
-- [ ] Upřesnit bezpečnostní politiku pro update balíček a spouštění her
-- [ ] Zpevnit `UpdateService` validací zdroje a integrity balíčku
-- [ ] Zpevnit `WeekendMotivationDialog` proti spuštění nedůvěryhodného `exe`
-- [ ] Doplnit guardy a error handling do startup/UI vstupních bodů
-- [ ] Zpřesnit logování kritických selhání bez tichého polykání chyb
-- [ ] Vyčlenit testovatelnou rozhodovací logiku tam, kde to bude nutné
-- [ ] Doplnit unit testy pro updater, monitoring a error-handling větve
-- [ ] Navrhnout rozumné pokrytí pořadí oken bez nadměrného refactoru
-- [ ] Ověřit build a všechny relevantní testy
-- [ ] Dopsat poznámky po dokončení a review sekci
+- [x] Upřesnit bezpečnostní politiku pro update balíček a spouštění her
+- [x] Zpevnit `UpdateService` validací zdroje a integrity balíčku
+- [x] Zpevnit `WeekendMotivationDialog` proti spuštění nedůvěryhodného `exe`
+- [x] Doplnit guardy a error handling do startup/UI vstupních bodů
+- [x] Zpřesnit logování kritických selhání bez tichého polykání chyb
+- [x] Vyčlenit testovatelnou rozhodovací logiku tam, kde to bude nutné
+- [x] Doplnit unit testy pro updater, monitoring a error-handling větve
+- [x] Navrhnout rozumné pokrytí pořadí oken bez nadměrného refactoru
+- [x] Ověřit build a všechny relevantní testy
+- [x] Dopsat poznámky po dokončení a review sekci
 
 ## Dotčené soubory
 
@@ -109,8 +109,21 @@
 
 ## Poznámky po dokončení
 
-> Doplnit po realizaci: které guardy a validace byly skutečně zavedeny, které scénáře bylo možné pokrýt testy, které UI scénáře zůstávají jen manuálně ověřované a proč.
+> Zavedena byla validace trusted GitHub HTTPS zdrojů pro manifest i download URL, kontrola podporovaných instalačních přípon, kontrola finální redirect URL po stažení a volitelná validace `SHA-256` checksumu z manifestu. U spouštění her byla doplněna validace absolutní cesty pod povolenými root adresáři a robustnější ošetření selhání `Process.Start`. Ve startupu a hlavním okně byly doplněny guardy, aby chyby v update flow, aktivaci okna nebo restore/hide toku neshodily aplikaci bez logu.
+
+> Testy nově pokrývají trusted-host policy, validaci `SHA-256`, trusted executable path a stávající integrační downloader scénáře. Skutečné pořadí WinUI oken zůstává primárně manuální / integrační záležitost, protože bez většího refactoru by čisté unit testy testovaly jen technické detaily UI frameworku, ne business rozhodnutí.
 
 ## Review
 
-> K doplnění po implementaci: stručné shrnutí výsledku, seznam ověřených scénářů, případné otevřené body pro další iteraci.
+> Implementace byla provedena s minimálním zásahem do stávající architektury. Přibyly helpery `UpdateSourcePolicy` a `ExecutableLaunchPolicy`, hardening `UpdateService`, lepší guardy v `App.xaml.cs`, `MainWindow.xaml.cs` a `WeekendMotivationDialog.xaml.cs` a nové MSTest testy.
+
+> Ověřené scénáře:
+> - `run_build` prošel úspěšně,
+> - `Diablo4.WinUI.Tests`: `20/20 passed`,
+> - updater odmítá neplatné / nedůvěryhodné URL,
+> - downloader stále funguje v integračních testech,
+> - validace cesty k `exe` blokuje soubory mimo povolené rooty.
+
+> Otevřené body pro další iteraci:
+> - pokud má být integrita update balíčku vynucená vždy, je vhodné doplnit `Sha256` i do produkčního `update-manifest.json`,
+> - pokud má být testované i skutečné pořadí WinUI oken, dává smysl až samostatná UI/integration test vrstva nebo lehká orchestration služba.

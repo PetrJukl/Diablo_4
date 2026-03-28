@@ -1,4 +1,5 @@
 using Diablo4.WinUI.Services;
+using Diablo4.WinUI.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
 using System.Net.Sockets;
@@ -27,6 +28,14 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
+    public async Task DownloadUpdateAsync_WhenDownloadUrlUsesUntrustedHost_ThrowsArgumentException()
+    {
+        var service = new UpdateService("https://raw.githubusercontent.com/PetrJukl/Diablo_4/main/update-manifest.json");
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => service.DownloadUpdateAsync("https://example.com/KontrolaParbySetup.exe"));
+    }
+
+    [TestMethod]
     public async Task ApplyUpdateAsync_WhenInstallerIsMissing_ThrowsFileNotFoundException()
     {
         var service = new UpdateService("https://example.invalid/manifest.json");
@@ -43,14 +52,23 @@ public class UpdateServiceTests
         using var server = await SingleResponseHttpServer.StartAsync(fileName, content);
         var service = new UpdateService("https://example.invalid/manifest.json");
 
-        var downloadedPath = await service.DownloadUpdateAsync(server.Url);
+        UpdateSourcePolicy.TrustOverride = uri => uri.IsLoopback;
 
-        var expectedDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "KontrolaParby",
-            "Updates");
+        try
+        {
+            var downloadedPath = await service.DownloadUpdateAsync(server.Url);
 
-        Assert.AreEqual(Path.Combine(expectedDirectory, fileName), downloadedPath, ignoreCase: true);
+            var expectedDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KontrolaParby",
+                "Updates");
+
+            Assert.AreEqual(Path.Combine(expectedDirectory, fileName), downloadedPath, ignoreCase: true);
+        }
+        finally
+        {
+            UpdateSourcePolicy.TrustOverride = null;
+        }
     }
 
     [TestMethod]
@@ -72,12 +90,21 @@ public class UpdateServiceTests
         using var server = await SingleResponseHttpServer.StartAsync(currentFileName, newContent);
         var service = new UpdateService("https://example.invalid/manifest.json");
 
-        var downloadedPath = await service.DownloadUpdateAsync(server.Url);
-        var downloadedContent = await File.ReadAllBytesAsync(downloadedPath);
+        UpdateSourcePolicy.TrustOverride = uri => uri.IsLoopback;
 
-        Assert.AreEqual(currentFilePath, downloadedPath, ignoreCase: true);
-        CollectionAssert.AreEqual(newContent, downloadedContent);
-        Assert.IsFalse(File.Exists(obsoleteFilePath));
+        try
+        {
+            var downloadedPath = await service.DownloadUpdateAsync(server.Url);
+            var downloadedContent = await File.ReadAllBytesAsync(downloadedPath);
+
+            Assert.AreEqual(currentFilePath, downloadedPath, ignoreCase: true);
+            CollectionAssert.AreEqual(newContent, downloadedContent);
+            Assert.IsFalse(File.Exists(obsoleteFilePath));
+        }
+        finally
+        {
+            UpdateSourcePolicy.TrustOverride = null;
+        }
     }
 
     private sealed class SingleResponseHttpServer : IDisposable

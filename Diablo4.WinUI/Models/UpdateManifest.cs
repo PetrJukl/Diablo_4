@@ -7,4 +7,5 @@ public sealed class UpdateManifest
     public string ReleaseNotes { get; set; } = string.Empty;
     public string MinimumVersion { get; set; } = string.Empty;
     public string ReleaseDate { get; set; } = string.Empty;
+    public string Sha256 { get; set; } = string.Empty;
 }

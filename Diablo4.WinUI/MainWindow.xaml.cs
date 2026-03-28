@@ -95,11 +95,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _isInitialized = true;
-        ConfigureWindow();
-        ViewModel.ProcessRunningStateChanged += ViewModel_ProcessRunningStateChanged;
-        _isTrayAvailable = TryInitializeTray();
-        ViewModel.Initialize(DispatcherQueue);
+        try
+        {
+            ConfigureWindow();
+            ViewModel.ProcessRunningStateChanged += ViewModel_ProcessRunningStateChanged;
+            _isTrayAvailable = TryInitializeTray();
+            ViewModel.Initialize(DispatcherQueue);
+            _isInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            ViewModel.ProcessRunningStateChanged -= ViewModel_ProcessRunningStateChanged;
+            AppDiagnostics.LogError("Inicializace hlavního okna selhala během aktivace.", ex);
+            return;
+        }
 
         if (ViewModel.IsProcessRunning)
         {
@@ -144,6 +153,10 @@ public sealed partial class MainWindow : Window
         catch (InvalidOperationException ex)
         {
             AppDiagnostics.LogError("Weekend dialog skončil v neplatném stavu.", ex);
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Weekend dialog selhal.", ex);
         }
         finally
         {
@@ -193,12 +206,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_isTrayAvailable)
+        try
         {
-            WindowExtensions.Show(this);
-        }
+            if (_isTrayAvailable)
+            {
+                WindowExtensions.Show(this);
+            }
 
-        Activate();
+            Activate();
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Obnovení hlavního okna selhalo.", ex);
+            return;
+        }
 
         if (ViewModel.IsProcessRunning)
         {
@@ -237,8 +258,15 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        args.Cancel = true;
-        WindowExtensions.Hide(this);
+        try
+        {
+            args.Cancel = true;
+            WindowExtensions.Hide(this);
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Skrytí hlavního okna do tray režimu selhalo.", ex);
+        }
     }
 
     private bool TryInitializeTray()

@@ -31,6 +31,14 @@ public sealed partial class WeekendMotivationDialog : Window
         "DragonAgeInquisition"
     ];
 
+    private static readonly string[] SearchRoots =
+    [
+        @"C:\Program Files",
+        @"C:\Program Files (x86)",
+        @"C:\Games",
+        @"C:\GOG Games",
+    ];
+
     public WeekendMotivationDialog()
     {
         InitializeComponent();
@@ -162,8 +170,33 @@ public sealed partial class WeekendMotivationDialog : Window
 
         if (!string.IsNullOrEmpty(executablePath) && !IsProcessRunning(processName))
         {
-            Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
-            Close();
+            if (!ExecutableLaunchPolicy.IsTrustedExecutablePath(executablePath, SearchRoots))
+            {
+                AppDiagnostics.LogWarning($"Spuštìní hry bylo zablokováno kvùli nedùvìryhodné cestì '{executablePath}'.");
+                await ShowMessageAsync("Spuštìní zablokováno", "Nalezený spustitelný soubor není v dùvìryhodném umístìní.");
+                return;
+            }
+
+            try
+            {
+                var startedProcess = Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
+                if (startedProcess is null)
+                {
+                    throw new InvalidOperationException("Vybranou hru se nepodaøilo spustit.");
+                }
+
+                Close();
+            }
+            catch (Win32Exception ex)
+            {
+                AppDiagnostics.LogError($"Spuštìní hry '{selectedGame}' selhalo.", ex);
+                await ShowMessageAsync("Spuštìní selhalo", "Vybranou hru se nepodaøilo spustit.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                AppDiagnostics.LogError($"Spuštìní hry '{selectedGame}' skonèilo v neplatném stavu.", ex);
+                await ShowMessageAsync("Spuštìní selhalo", "Vybranou hru se nepodaøilo spustit.");
+            }
         }
         else if (IsProcessRunning(processName))
         {
@@ -195,14 +228,6 @@ public sealed partial class WeekendMotivationDialog : Window
         "DragonAgeInquisition" => "DragonAgeInquisition.exe",
         _ => string.Empty
     };
-
-    private static readonly string[] SearchRoots =
-    [
-        @"C:\Program Files",
-        @"C:\Program Files (x86)",
-        @"C:\Games",
-        @"C:\GOG Games",
-    ];
 
     private static async Task<string> FindExecutablePathAsync(string executableName, CancellationToken ct)
     {

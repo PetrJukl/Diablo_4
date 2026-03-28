@@ -29,6 +29,8 @@ public partial class App : Application
     private static void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         AppDiagnostics.LogError("Neošetřená UI výjimka.", e.Exception);
+        LogStartupException("Application.UnhandledException", e.Exception);
+        e.Handled = true;
     }
 
     private static void CurrentDomain_UnhandledException(object sender, System.UnhandledExceptionEventArgs e)
@@ -84,7 +86,15 @@ public partial class App : Application
             throw;
         }
 
-        await TryRunUpdateFlowAsync();
+        try
+        {
+            await TryRunUpdateFlowAsync();
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Update flow selhal během spuštění aplikace.", ex);
+            LogStartupException("App.TryRunUpdateFlowAsync", ex);
+        }
     }
 
     private static async Task TryRunUpdateFlowAsync()
@@ -117,8 +127,18 @@ public partial class App : Application
             return;
         }
 
-        var updateWindow = new UpdateNotificationWindow(updateResult, updateService);
-        var shouldClose = await updateWindow.ShowAndWaitAsync();
+        bool shouldClose;
+
+        try
+        {
+            var updateWindow = new UpdateNotificationWindow(updateResult, updateService);
+            shouldClose = await updateWindow.ShowAndWaitAsync();
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Zobrazení update okna selhalo.", ex);
+            return;
+        }
 
         if (shouldClose)
         {
