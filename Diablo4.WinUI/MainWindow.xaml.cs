@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         _appWindow = AppWindow.GetFromWindowId(windowId);
+        _appWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "211668_controller_b_game_icon.ico"));
         _appWindow.Resize(new SizeInt32(1245, 575));
 
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);

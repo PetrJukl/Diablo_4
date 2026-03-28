@@ -19,6 +19,7 @@
         <RootNamespace>Diablo4.WinUI</RootNamespace>
 
         <!-- App Options -->
+        <ApplicationIcon>Assets\211668_controller_b_game_icon.ico</ApplicationIcon>
         <UseRidGraph>true</UseRidGraph>
         <Platforms>x86;x64;ARM64</Platforms>
         <ApplicationManifest>app.manifest</ApplicationManifest>

@@ -21,6 +21,7 @@ internal sealed class UpdateNotificationWindow : Window
     private static readonly IntPtr HwndTopmost = new(-1);
     private const uint SwpNoMove = 0x0002;
     private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoActivate = 0x0010;
 
     private readonly UpdateCheckResult _updateResult;
     private readonly UpdateService _updateService;
@@ -30,6 +31,7 @@ internal sealed class UpdateNotificationWindow : Window
     private ProgressRing? _progressRing;
     private TextBlock? _errorText;
     private bool _installSucceeded;
+    private bool _zOrderReassertQueued;
 
     internal UpdateNotificationWindow(UpdateCheckResult updateResult, UpdateService updateService)
     {
@@ -53,6 +55,7 @@ internal sealed class UpdateNotificationWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         var appWindow = AppWindow.GetFromWindowId(windowId);
+        appWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "211668_controller_b_game_icon.ico"));
         appWindow.Resize(new SizeInt32(480, 320));
 
         var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
@@ -69,6 +72,19 @@ internal sealed class UpdateNotificationWindow : Window
         }
 
         SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize);
+
+        appWindow.Changed += (_, args) =>
+        {
+            if (!args.DidZOrderChange || _zOrderReassertQueued)
+                return;
+
+            _zOrderReassertQueued = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _zOrderReassertQueued = false;
+                SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+            });
+        };
     }
 
     private UIElement BuildContent()
