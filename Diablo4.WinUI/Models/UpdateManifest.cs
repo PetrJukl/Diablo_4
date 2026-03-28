@@ -1,5 +1,3 @@
-using System;
-
 namespace Diablo4.WinUI.Models;
 
 public sealed class UpdateManifest
@@ -8,5 +6,5 @@ public sealed class UpdateManifest
     public string DownloadUrl { get; set; } = string.Empty;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string MinimumVersion { get; set; } = string.Empty;
-    public DateTime? ReleaseDate { get; set; }
+    public string ReleaseDate { get; set; } = string.Empty;
 }
