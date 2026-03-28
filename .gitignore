@@ -4,6 +4,9 @@
 **/[Bb]in/
 **/[Oo]bj/
 
+# Installer build artefakty
+artifacts/
+
 # Legacy ClickOnce publish outputs
 **/app.publish/
 
