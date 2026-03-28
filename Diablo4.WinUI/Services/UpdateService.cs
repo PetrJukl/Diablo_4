@@ -127,8 +127,7 @@ public sealed class UpdateService
         response.EnsureSuccessStatusCode();
 
         if (response.RequestMessage?.RequestUri is not { } finalDownloadUri
-            || !UpdateSourcePolicy.IsTrustedDownloadUri(finalDownloadUri)
-            || !UpdateSourcePolicy.HasSupportedInstallerExtension(finalDownloadUri))
+            || !UpdateSourcePolicy.IsTrustedDownloadUri(finalDownloadUri))
         {
             throw new InvalidOperationException("Stažený balíček pochází z nedůvěryhodného zdroje.");
         }

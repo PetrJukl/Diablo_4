@@ -107,6 +107,38 @@ public class UpdateServiceTests
         }
     }
 
+    [TestMethod]
+    public async Task DownloadUpdateAsync_WhenTrustedRedirectTargetHasNoExtension_StoresInstallerSuccessfully()
+    {
+        var fileName = $"KontrolaParbySetup-{Guid.NewGuid():N}.exe";
+        var content = "redirected-installer-content"u8.ToArray();
+        using var server = await RedirectingHttpServer.StartAsync(fileName, "/download", content);
+        var service = new UpdateService("https://example.invalid/manifest.json");
+
+        UpdateSourcePolicy.TrustOverride = uri => uri.IsLoopback;
+
+        try
+        {
+            var downloadedPath = await service.DownloadUpdateAsync(server.EntryUrl);
+            var downloadedContent = await File.ReadAllBytesAsync(downloadedPath);
+
+            CollectionAssert.AreEqual(content, downloadedContent);
+        }
+        finally
+        {
+            UpdateSourcePolicy.TrustOverride = null;
+        }
+    }
+
+    private static int GetFreePort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
     private sealed class SingleResponseHttpServer : IDisposable
     {
         private readonly HttpListener _listener;
@@ -123,7 +155,7 @@ public class UpdateServiceTests
 
         public static async Task<SingleResponseHttpServer> StartAsync(string fileName, byte[] content)
         {
-            var port = GetFreePort();
+            var port = UpdateServiceTests.GetFreePort();
             var prefix = $"http://127.0.0.1:{port}/";
             var url = $"{prefix}{fileName}";
             var listener = new HttpListener();
@@ -148,14 +180,54 @@ public class UpdateServiceTests
             _listener.Close();
             _serveTask.GetAwaiter().GetResult();
         }
+    }
 
-        private static int GetFreePort()
+    private sealed class RedirectingHttpServer : IDisposable
+    {
+        private readonly HttpListener _listener;
+        private readonly Task _serveTask;
+
+        private RedirectingHttpServer(HttpListener listener, string entryUrl, Task serveTask)
         {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener = listener;
+            EntryUrl = entryUrl;
+            _serveTask = serveTask;
+        }
+
+        public string EntryUrl { get; }
+
+        public static async Task<RedirectingHttpServer> StartAsync(string entryFileName, string redirectPath, byte[] content)
+        {
+            var port = UpdateServiceTests.GetFreePort();
+            var prefix = $"http://127.0.0.1:{port}/";
+            var entryUrl = $"{prefix}{entryFileName}";
+            var redirectUrl = $"{prefix}{redirectPath.TrimStart('/')}";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefix);
             listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
-            return port;
+
+            var serveTask = Task.Run(async () =>
+            {
+                var redirectContext = await listener.GetContextAsync();
+                redirectContext.Response.StatusCode = (int)HttpStatusCode.Redirect;
+                redirectContext.Response.RedirectLocation = redirectUrl;
+                redirectContext.Response.Close();
+
+                var contentContext = await listener.GetContextAsync();
+                contentContext.Response.StatusCode = (int)HttpStatusCode.OK;
+                contentContext.Response.ContentLength64 = content.Length;
+                await contentContext.Response.OutputStream.WriteAsync(content);
+                contentContext.Response.OutputStream.Close();
+            });
+
+            return new RedirectingHttpServer(listener, entryUrl, serveTask);
+        }
+
+        public void Dispose()
+        {
+            _listener.Stop();
+            _listener.Close();
+            _serveTask.GetAwaiter().GetResult();
         }
     }
 }
