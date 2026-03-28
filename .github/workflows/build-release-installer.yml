@@ -55,6 +55,14 @@ jobs:
           "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
           "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
 
+      - name: Stage manifest script
+        id: manifestScript
+        shell: pwsh
+        run: |
+          $scriptPath = Join-Path $env:RUNNER_TEMP 'Write-UpdateManifest.ps1'
+          Copy-Item '.github/scripts/Write-UpdateManifest.ps1' $scriptPath -Force
+          "path=$scriptPath" >> $env:GITHUB_OUTPUT
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -84,7 +92,9 @@ jobs:
           git fetch origin $defaultBranch --depth=1
           git switch -C $defaultBranch "origin/$defaultBranch"
 
-          ./.github/scripts/Write-UpdateManifest.ps1 `
+          $manifestScriptPath = '${{ steps.manifestScript.outputs.path }}'
+
+          & $manifestScriptPath `
               -Version '${{ steps.version.outputs.value }}' `
               -DownloadUrl ([string]$asset.browser_download_url) `
               -ReleaseNotes ([string]$release.body) `
