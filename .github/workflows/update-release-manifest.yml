@@ -25,7 +25,7 @@ jobs:
           $event = Get-Content $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json -Depth 100
           $release = $event.release
           $assets = @($release.assets)
-          $supportedExtensions = '.msix', '.msixbundle', '.appinstaller', '.exe', '.zip'
+          $supportedExtensions = '.exe', '.msix', '.msixbundle', '.appinstaller', '.zip'
           $selectedAsset = $null
 
           foreach ($extension in $supportedExtensions) {
@@ -36,7 +36,7 @@ jobs:
           }
 
           if ($null -eq $selectedAsset) {
-              throw 'Release neobsahuje podporovaný instalační asset (.msix, .msixbundle, .appinstaller, .exe, .zip).'
+              throw 'Release neobsahuje podporovaný instalační asset (.exe, .msix, .msixbundle, .appinstaller, .zip).'
           }
 
           $versionText = [string]$release.tag_name

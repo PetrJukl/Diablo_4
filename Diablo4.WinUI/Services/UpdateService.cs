@@ -104,7 +104,7 @@ public sealed class UpdateService
         var fileName = Path.GetFileName(downloadUri.LocalPath);
         if (string.IsNullOrWhiteSpace(fileName))
         {
-            fileName = "Diablo4.WinUI.msix";
+            fileName = "KontrolaParbySetup.exe";
         }
 
         var destinationPath = Path.Combine(
@@ -139,6 +139,7 @@ public sealed class UpdateService
 
         Process.Start(new ProcessStartInfo(installerPath)
         {
+            WorkingDirectory = Path.GetDirectoryName(installerPath),
             UseShellExecute = true
         });
 

@@ -8,6 +8,11 @@
 - zbývá ověřit build a první publikovaný GitHub release s reálným assetem
 - lokální build řešení proběhl úspěšně
 - v řešení nebyly nalezeny automatické testy
+- přidán publish profil `installer-win-x64` pro unpackaged `win-x64` publish výstup
+- přidán `installer/Diablo4.WinUI.iss` pro `Inno Setup` installer
+- přidán `installer/build-installer.ps1` pro lokální build installeru s verzí z parametru
+- přidán workflow `.github/workflows/build-release-installer.yml` pro build installeru a vytvoření GitHub releasu z tagu
+- `update-release-manifest.yml` preferuje `.exe` asset a vzorový manifest je sladěný s installer flow
 
 2026-03-28 Audit stability a hardening aplikace
 - zmapovány oba projekty: legacy `Diablo 4` (.NET Framework 4.8.1) a `Diablo4.WinUI` (.NET 8)

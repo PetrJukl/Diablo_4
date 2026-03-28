@@ -1,0 +1,95 @@
+name: Build release installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $versionText = '${{ github.ref_name }}'.TrimStart('v', 'V')
+          $parsedVersion = $null
+          if (-not [Version]::TryParse($versionText, [ref]$parsedVersion)) {
+              throw "Tag '${{ github.ref_name }}' nemá podporovaný formát verze. Použij např. v1.0.0.0."
+          }
+
+          "value=$($parsedVersion.ToString())" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: .\installer\build-installer.ps1 -Version '${{ steps.version.outputs.value }}'
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/installer/*.exe
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Update `update-manifest.json`
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $defaultBranch = '${{ github.event.repository.default_branch }}'
+          $tagName = '${{ github.ref_name }}'
+          $headers = @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'User-Agent' = 'GitHub Actions'
+          }
+
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tagName" -Headers $headers
+          $asset = @($release.assets) | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
+          if ($null -eq $asset) {
+              throw 'Vytvořený release neobsahuje `.exe` installer asset.'
+          }
+
+          git fetch origin $defaultBranch --depth=1
+          git switch -C $defaultBranch "origin/$defaultBranch"
+
+          $manifest = [ordered]@{
+              LatestVersion = '${{ steps.version.outputs.value }}'
+              DownloadUrl = [string]$asset.browser_download_url
+              ReleaseNotes = [string]$release.body
+              MinimumVersion = ''
+              ReleaseDate = [string]$release.published_at
+          }
+
+          $manifest | ConvertTo-Json | Set-Content -Path 'update-manifest.json' -Encoding utf8NoBOM
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add update-manifest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host 'Manifest beze změny.'
+              exit 0
+          }
+
+          git commit -m "chore: update release manifest for $tagName"
+          git push origin "HEAD:$defaultBranch"
