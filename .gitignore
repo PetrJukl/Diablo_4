@@ -11,3 +11,6 @@
 *.user
 *.suo
 *.userosscache
+
+# Legacy WinForms projekt mimo aktivní rozsah vývoje
+/Diablo 4/

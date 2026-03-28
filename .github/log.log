@@ -8,3 +8,11 @@
 - zbývá ověřit build a první publikovaný GitHub release s reálným assetem
 - lokální build řešení proběhl úspěšně
 - v řešení nebyly nalezeny automatické testy
+
+2026-03-28 Audit stability a hardening aplikace
+- zmapovány oba projekty: legacy `Diablo 4` (.NET Framework 4.8.1) a `Diablo4.WinUI` (.NET 8)
+- nalezena duplikovaná monitorovací logika a více rizikových vzorů: `Thread.Sleep`, tiché `catch`, `Environment.Exit`, `Process.Kill`
+- lokální build řešení proběhl úspěšně
+- v `.github/plans/PLAN-2026-03-28-stabilizace-a-hardening-aplikace.md` uložen návrh stabilizačního postupu
+- plán stabilizace zúžen pouze na `Diablo4.WinUI`
+- legacy složka `Diablo 4/` přidána do `.gitignore`
