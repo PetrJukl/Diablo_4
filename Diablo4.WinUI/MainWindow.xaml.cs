@@ -95,7 +95,6 @@ public sealed partial class MainWindow : Window
 
         _isInitialized = true;
         ConfigureWindow();
-        ProcessHelper.CloseOtherInstances("Diablo4.WinUI");
         ViewModel.ProcessRunningStateChanged += ViewModel_ProcessRunningStateChanged;
         _isTrayAvailable = TryInitializeTray();
         ViewModel.Initialize(DispatcherQueue);

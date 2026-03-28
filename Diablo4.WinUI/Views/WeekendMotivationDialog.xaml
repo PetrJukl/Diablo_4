@@ -78,6 +78,13 @@
                     Width="88"
                     Style="{StaticResource AccentButtonStyle}"
                     Click="AnoButton_Click"/>
+                <ProgressRing
+                    x:Name="LaunchProgressRing"
+                    Width="24"
+                    Height="24"
+                    Foreground="White"
+                    Visibility="Collapsed"
+                    IsActive="False"/>
                 <Button
                     x:Name="NeButton"
                     Content="Ne"

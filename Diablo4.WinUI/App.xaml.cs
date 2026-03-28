@@ -1,11 +1,12 @@
 using Diablo4.WinUI.Helpers;
 using Diablo4.WinUI.Models;
 using Diablo4.WinUI.Services;
+using Diablo4.WinUI.Views;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Diablo4.WinUI;
@@ -13,6 +14,7 @@ namespace Diablo4.WinUI;
 public partial class App : Application
 {
     private static readonly string StartupErrorLogPath = Path.Combine(Path.GetTempPath(), "Diablo4.WinUI.startup.log");
+    private static Mutex? _singleInstanceMutex;
 
     public static MainWindow? MainWindow { get; private set; }
 
@@ -61,6 +63,15 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _singleInstanceMutex = new Mutex(true, "Local\\Diablo4.WinUI.SingleInstance", out var isNewInstance);
+        if (!isNewInstance)
+        {
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+            Environment.Exit(0);
+            return;
+        }
+
         try
         {
             MainWindow = new MainWindow();
@@ -101,74 +112,17 @@ public partial class App : Application
             AppDiagnostics.LogWarning($"Kontrola aktualizací skončila chybou: {updateResult.ErrorMessage}");
         }
 
-        if (!updateResult.IsUpdateAvailable || updateResult.Manifest is null || MainWindow.DialogRoot.XamlRoot is null)
+        if (!updateResult.IsUpdateAvailable || updateResult.Manifest is null)
         {
             return;
         }
 
-        var dialog = new ContentDialog
-        {
-            XamlRoot = MainWindow.DialogRoot.XamlRoot,
-            Title = $"Dostupná aktualizace {updateResult.LatestVersion}",
-            Content = BuildUpdateDialogContent(updateResult),
-            PrimaryButtonText = "Instalovat",
-            CloseButtonText = "Později"
-        };
+        var updateWindow = new UpdateNotificationWindow(updateResult, updateService);
+        var shouldClose = await updateWindow.ShowAndWaitAsync();
 
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
+        if (shouldClose)
         {
-            return;
-        }
-
-        try
-        {
-            await updateService.DownloadAndInstallAsync(updateResult.Manifest);
             MainWindow.Close();
         }
-        catch (Exception ex)
-        {
-            AppDiagnostics.LogError("Stažení nebo instalace aktualizace selhalo.", ex);
-            await ShowUpdateFailureDialogAsync(MainWindow.DialogRoot.XamlRoot);
-        }
-    }
-
-    private static async Task ShowUpdateFailureDialogAsync(Microsoft.UI.Xaml.XamlRoot xamlRoot)
-    {
-        var dialog = new ContentDialog
-        {
-            XamlRoot = xamlRoot,
-            Title = "Aktualizaci se nepodařilo nainstalovat",
-            Content = "Kontrola nebo instalace aktualizace selhala. Aplikace bude pokračovat bez aktualizace.",
-            CloseButtonText = "OK"
-        };
-
-        await dialog.ShowAsync();
-    }
-
-    private static UIElement BuildUpdateDialogContent(UpdateCheckResult updateResult)
-    {
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"Aktuální verze: {updateResult.CurrentVersion}",
-            TextWrapping = TextWrapping.Wrap
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"Nová verze: {updateResult.LatestVersion}",
-            TextWrapping = TextWrapping.Wrap
-        });
-
-        if (!string.IsNullOrWhiteSpace(updateResult.Manifest?.ReleaseNotes))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = updateResult.Manifest.ReleaseNotes,
-                TextWrapping = TextWrapping.Wrap
-            });
-        }
-
-        return panel;
     }
 }

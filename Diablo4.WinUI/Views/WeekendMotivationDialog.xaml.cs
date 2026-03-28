@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.Graphics;
 using Windows.UI;
@@ -74,6 +75,8 @@ public sealed partial class WeekendMotivationDialog : Window
             presenter.IsMinimizable = false;
         }
 
+        SetWindowTopmost(hwnd);
+
         // Prùhledná caption tlaèítka – splývají s obrázkem
         var titleBar = appWindow.TitleBar;
         titleBar.ButtonBackgroundColor = new Color { A = 0, R = 0, G = 0, B = 0 };
@@ -92,6 +95,11 @@ public sealed partial class WeekendMotivationDialog : Window
         }
 
         _isLaunchInProgress = true;
+        AnoButton.IsEnabled = false;
+        GamesComboBox.IsEnabled = false;
+        LaunchProgressRing.Visibility = Visibility.Visible;
+        LaunchProgressRing.IsActive = true;
+
         string selectedGame = GamesComboBox.SelectedItem as string ?? "Diablo IV";
         string executableName = GetExecutableName(selectedGame);
         string processName = Path.GetFileNameWithoutExtension(executableName);
@@ -115,6 +123,10 @@ public sealed partial class WeekendMotivationDialog : Window
         finally
         {
             _isLaunchInProgress = false;
+            LaunchProgressRing.IsActive = false;
+            LaunchProgressRing.Visibility = Visibility.Collapsed;
+            AnoButton.IsEnabled = true;
+            GamesComboBox.IsEnabled = true;
         }
 
         if (_isClosed)
@@ -245,5 +257,11 @@ public sealed partial class WeekendMotivationDialog : Window
 
         await dialog.ShowAsync();
     }
+
+    private static void SetWindowTopmost(IntPtr hwnd)
+        => SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0002 | 0x0001);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 }
 
