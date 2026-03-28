@@ -1,7 +1,7 @@
 {
-  "LatestVersion": "1.0.0.0",
-  "DownloadUrl": "https://github.com/PetrJukl/Diablo_4/releases/latest",
-  "ReleaseNotes": "Manifest bude po prvním tagovaném buildu automaticky aktualizovaný GitHub workflowem pro Inno Setup installer.",
-  "MinimumVersion": "1.0.0.0",
-  "ReleaseDate": "2026-03-28T00:00:00Z"
+  "LatestVersion": "1.0.0.1",
+  "DownloadUrl": "https://github.com/PetrJukl/Diablo_4/releases/download/v1.0.0.1/KontrolaParbySetup-1.0.0.1.exe",
+  "ReleaseNotes": "**Full Changelog**: https://github.com/PetrJukl/Diablo_4/compare/v1.0.0.0...v1.0.0.1",
+  "MinimumVersion": "",
+  "ReleaseDate": "03/28/2026 14:48:57"
 }
