@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
 {
     private AppWindow? _appWindow;
     private TaskbarIcon? _trayIcon;
+    private WeekendMotivationDialog? _weekendMotivationWindow;
     private bool _isInitialized;
     private bool _isClosed;
     private bool _isExitRequested;
@@ -113,6 +114,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        CloseWeekendMotivationWindow();
         HideToTrayOrMinimize();
     }
 
@@ -126,11 +128,13 @@ public sealed partial class MainWindow : Window
         _isWeekendMotivationOpen = true;
 
         var window = new WeekendMotivationDialog();
+        _weekendMotivationWindow = window;
 
         void closeWeekendWindow(object s, WindowEventArgs a)
         {
-            try { window.Close(); } catch (InvalidOperationException) { }
+            CloseWeekendMotivationWindow();
         }
+
         Closed += closeWeekendWindow;
 
         try
@@ -144,6 +148,11 @@ public sealed partial class MainWindow : Window
         finally
         {
             Closed -= closeWeekendWindow;
+            if (ReferenceEquals(_weekendMotivationWindow, window))
+            {
+                _weekendMotivationWindow = null;
+            }
+
             _isWeekendMotivationOpen = false;
 
             if (!_isClosed && ViewModel.IsProcessRunning)
@@ -151,6 +160,19 @@ public sealed partial class MainWindow : Window
                 DispatcherQueue.TryEnqueue(HideToTrayOrMinimize);
             }
         }
+    }
+
+    private void CloseWeekendMotivationWindow()
+    {
+        var weekendMotivationWindow = _weekendMotivationWindow;
+        _weekendMotivationWindow = null;
+
+        if (weekendMotivationWindow is null)
+        {
+            return;
+        }
+
+        weekendMotivationWindow.RequestClose();
     }
 
     private void ExitApplication()

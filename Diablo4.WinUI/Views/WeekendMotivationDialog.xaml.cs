@@ -1,3 +1,4 @@
+using Diablo4.WinUI.Helpers;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -55,6 +56,33 @@ public sealed partial class WeekendMotivationDialog : Window
         return _tcs.Task;
     }
 
+    internal void RequestClose()
+    {
+        if (_isClosed)
+        {
+            return;
+        }
+
+        GamesComboBox.IsDropDownOpen = false;
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_isClosed)
+            {
+                return;
+            }
+
+            try
+            {
+                Close();
+            }
+            catch (InvalidOperationException ex)
+            {
+                AppDiagnostics.LogWarning("Nepodaøilo se korektnì zavøít weekend dialog.", ex);
+            }
+        });
+    }
+
     private void ConfigureWindow()
     {
         var hwnd = WindowNative.GetWindowHandle(this);
@@ -74,8 +102,6 @@ public sealed partial class WeekendMotivationDialog : Window
             presenter.IsMaximizable = false;
             presenter.IsMinimizable = false;
         }
-
-        SetWindowTopmost(hwnd);
 
         // Prùhledná caption tlaèítka – splývají s obrázkem
         var titleBar = appWindow.TitleBar;
@@ -158,9 +184,7 @@ public sealed partial class WeekendMotivationDialog : Window
 
     private void NeButton_Click(object sender, RoutedEventArgs e)
     {
-        // Zavøít dropdown pøed Close() – WinUI 3 crashuje pøi destrukci okna s otevøeným Popup-em
-        GamesComboBox.IsDropDownOpen = false;
-        Close();
+        RequestClose();
     }
 
     private static string GetExecutableName(string gameName) => gameName switch
@@ -258,10 +282,5 @@ public sealed partial class WeekendMotivationDialog : Window
         await dialog.ShowAsync();
     }
 
-    private static void SetWindowTopmost(IntPtr hwnd)
-        => SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, 0x0002 | 0x0001);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 }
 

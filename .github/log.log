@@ -42,3 +42,13 @@
 - tím se vrátil okamžitý náběh aktuálního času hraní bez čekání na opakované parsování velkého log souboru
 - opraven `ProcessMonitor`: `_lastLogPosition` se po přepisu prvního řádku už neposouvá na konec souboru, takže jedna session znovu přepisuje jeden řádek místo řetězení duplicit
 - vrácen původní formát zápisu délky session (`duration.TotalSeconds` přes aktuální kulturu) pro kompatibilitu s historickým logem
+- upraveno pořadí WinUI oken: `WeekendMotivationDialog` už není `topmost`, při otevření se pouze zařadí nad `MainWindow`
+- `UpdateNotificationWindow` zůstává jediné okno s vynuceným `topmost`, takže při souběhu oken zůstává vždy nahoře
+- `MainWindow` nově drží referenci na víkendové okno a při externím spuštění sledovaného procesu ho zavře ještě před následným hide-to-tray flow
+- ověření po změně: `run_build` úspěšný, `Diablo4.WinUI.Tests.dll` prošel 9/9 testů
+- odstraněna regresní Win32 manipulace `SetWindowPos(..., _ownerHwnd, ...)` z `WeekendMotivationDialog`, která v debug běhu způsobovala `System.AccessViolationException` v `Microsoft.WinUI.dll`
+- finální řešení ponechává víkendové okno bez `topmost`; zobrazuje se standardně přes `Activate()`, zatímco `UpdateNotificationWindow` zůstává jediné topmost okno
+- ověření po opravě regrese: `run_build` úspěšný, `Diablo4.WinUI.Tests.dll` znovu prošel 9/9 testů
+- další stabilizační oprava: programatické zavírání `WeekendMotivationDialog` nově používá `RequestClose()`, které nejdřív zavře `ComboBox` popup a `Close()` odloží do UI fronty
+- tím se omezuje WinUI crash při destrukci víkendového okna v době, kdy má otevřený popup nebo probíhá citlivý UI přechod
+- ověření po úpravě zavírání: `run_build` úspěšný, `Diablo4.WinUI.Tests.dll` prošel 9/9 testů
