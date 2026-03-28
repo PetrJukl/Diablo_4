@@ -42,6 +42,9 @@ if (-not (Test-Path $mainExecutable)) {
     throw "Publish výstup neobsahuje '$mainExecutable'."
 }
 
+if (-not $repoRoot.EndsWith('\')) { $repoRoot += '\' }
+if (-not $publishDir.EndsWith('\')) { $publishDir += '\' }
+
 & $isccPath "/DAppVersion=$Version" "/DRepoRoot=$repoRoot" "/DPublishDir=$publishDir" $installerScript
 if ($LASTEXITCODE -ne 0) {
     throw "Vytvoření installeru selhalo s návratovým kódem $LASTEXITCODE."
