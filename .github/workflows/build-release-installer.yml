@@ -55,61 +55,9 @@ jobs:
           "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
           "name=$($installer.Name)" >> $env:GITHUB_OUTPUT
 
-      - name: Stage manifest script
-        id: manifestScript
-        shell: pwsh
-        run: |
-          $scriptPath = Join-Path $env:RUNNER_TEMP 'Write-UpdateManifest.ps1'
-          Copy-Item '.github/scripts/Write-UpdateManifest.ps1' $scriptPath -Force
-          "path=$scriptPath" >> $env:GITHUB_OUTPUT
-
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.installer.outputs.path }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-
-      - name: Update `update-manifest.json`
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $defaultBranch = '${{ github.event.repository.default_branch }}'
-          $tagName = '${{ github.ref_name }}'
-          $headers = @{
-              Authorization = "Bearer $env:GITHUB_TOKEN"
-              Accept = 'application/vnd.github+json'
-              'User-Agent' = 'GitHub Actions'
-          }
-
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tagName" -Headers $headers
-          $asset = @($release.assets) | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
-          if ($null -eq $asset) {
-              throw 'Vytvořený release neobsahuje `.exe` installer asset.'
-          }
-
-          git fetch origin $defaultBranch --depth=1
-          git switch -C $defaultBranch "origin/$defaultBranch"
-
-          $manifestScriptPath = '${{ steps.manifestScript.outputs.path }}'
-
-          & $manifestScriptPath `
-              -Version '${{ steps.version.outputs.value }}' `
-              -DownloadUrl ([string]$asset.browser_download_url) `
-              -ReleaseNotes ([string]$release.body) `
-              -ReleaseDate ([string]$release.published_at) `
-              -InstallerPath '${{ steps.installer.outputs.path }}' `
-              -OutputPath 'update-manifest.json'
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add update-manifest.json
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-              Write-Host 'Manifest beze změny.'
-              exit 0
-          }
-
-          git commit -m "chore: update release manifest for $tagName"
-          git push origin "HEAD:$defaultBranch"
