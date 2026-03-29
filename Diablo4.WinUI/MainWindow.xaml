@@ -23,7 +23,7 @@
             Width="888"
             Height="257"
             TextWrapping="Wrap"
-            Margin="360,333,0,0"/>
+            Margin="380,340,0,0"/>
 
         <TextBlock
             x:Name="weekDuration"
@@ -33,7 +33,7 @@
             Foreground="White"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
-            Margin="8,375,0,0"/>
+            Margin="8,360,0,0"/>
 
         <TextBlock
             x:Name="lastWeekDuration"
@@ -43,7 +43,7 @@
             Foreground="White"
             HorizontalAlignment="Left"
             VerticalAlignment="Top"
-            Margin="8,481,0,0"/>
+            Margin="8,450,0,0"/>
     </Grid>
 </Window>
 

@@ -59,11 +59,11 @@ public partial class MainViewModel : ObservableObject
             "Diablo IV",
             "DragonAgeInquisition",
             "Diablo III64",
-            "devenv",
             "Code",
             "Dragon Age The Veilguard",
             "DragonAge2",
             "daorigins",
+            "devenv",
             "WindowsTerminal",
             "OpenConsole"
         );
