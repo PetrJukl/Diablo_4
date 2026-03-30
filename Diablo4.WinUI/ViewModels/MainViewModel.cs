@@ -79,7 +79,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (_cachedLastPlayedDateTime == null) return;
         TimeSpan timeSinceLastWrite = DateTime.Now - _cachedLastPlayedDateTime.Value;
-        MessageText = $"Už jsi nepařila: {timeSinceLastWrite.Days} dní, {timeSinceLastWrite.Hours} hodiny,\n  {timeSinceLastWrite.Minutes} minuty, {timeSinceLastWrite.Seconds} sekund a {timeSinceLastWrite.Milliseconds} miliseků :).";
+        MessageText = $"Už jsi nepařila: {FormatDetailedDuration(timeSinceLastWrite)} :).";
     }
 
     private void UpdateStatsTimerTick(DispatcherQueueTimer sender, object args)
@@ -101,7 +101,7 @@ public partial class MainViewModel : ObservableObject
             if (durations.ThisWeek != TimeSpan.Zero)
             {
                 _totalDuration = durations.ThisWeek;
-                string formattedDuration = $"{Math.Floor(_totalDuration.TotalHours)} hodin, {_totalDuration.Minutes} minut a {_totalDuration.Seconds} vteřin";
+                string formattedDuration = FormatSummaryDuration(_totalDuration);
                 WeekDurationText = $"Tento týden \n {formattedDuration}";
             }
             else
@@ -112,7 +112,7 @@ public partial class MainViewModel : ObservableObject
             if (durations.LastWeek != TimeSpan.Zero)
             {
                 TimeSpan lastWeekTotalDuration = durations.LastWeek;
-                string formattedDuration = $"{Math.Floor(lastWeekTotalDuration.TotalHours)} hodin, {lastWeekTotalDuration.Minutes} minut a {lastWeekTotalDuration.Seconds} vteřin";
+                string formattedDuration = FormatSummaryDuration(lastWeekTotalDuration);
                 LastWeekDurationText = $"Minulý týden \n {formattedDuration}";
             }
             else
@@ -176,6 +176,40 @@ public partial class MainViewModel : ObservableObject
             _isWeekend = true;
             WeekendMotivationRequested?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private static string FormatDetailedDuration(TimeSpan duration)
+    {
+        return $"{FormatTimeUnit(duration.Days, "den", "dny", "dní")}, {FormatTimeUnit(duration.Hours, "hodina", "hodiny", "hodin")},\n  {FormatTimeUnit(duration.Minutes, "minuta", "minuty", "minut")}, {FormatTimeUnit(duration.Seconds, "vteřina", "vteřiny", "vteřin")} a {FormatTimeUnit(duration.Milliseconds, "milisekunda", "milisekundy", "milisekund")}";
+    }
+
+    private static string FormatSummaryDuration(TimeSpan duration)
+    {
+        int totalHours = (int)Math.Floor(duration.TotalHours);
+        return $"{FormatTimeUnit(totalHours, "hodina", "hodiny", "hodin")}, {FormatTimeUnit(duration.Minutes, "minuta", "minuty", "minut")} a {FormatTimeUnit(duration.Seconds, "vteřina", "vteřiny", "vteřin")}";
+    }
+
+    private static string FormatTimeUnit(int value, string singular, string few, string many)
+    {
+        return $"{value} {GetCzechPluralForm(value, singular, few, many)}";
+    }
+
+    private static string GetCzechPluralForm(int value, string singular, string few, string many)
+    {
+        int absoluteValue = Math.Abs(value);
+        int lastTwoDigits = absoluteValue % 100;
+
+        if (lastTwoDigits is >= 11 and <= 14)
+        {
+            return many;
+        }
+
+        return (absoluteValue % 10) switch
+        {
+            1 => singular,
+            2 or 3 or 4 => few,
+            _ => many
+        };
     }
 
     public bool IsProcessRunning => _processMonitor?.IsRunning ?? false;
