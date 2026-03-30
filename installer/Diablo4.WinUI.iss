@@ -40,6 +40,7 @@ CloseApplications=yes
 CloseApplicationsFilter={#AppExeName}
 RestartApplications=no
 UsePreviousAppDir=yes
+UsePreviousTasks=yes
 ChangesAssociations=no
 
 [Languages]
@@ -47,6 +48,7 @@ Name: "czech"; MessagesFile: "compiler:Languages\Czech.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Vytvořit ikonu na ploše"; Flags: unchecked
+Name: "startupicon"; Description: "Spouštět po přihlášení do Windows"; Flags: checkedonce
 
 [Files]
 Source: "{#PublishDir}*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.pdb"
@@ -54,6 +56,7 @@ Source: "{#PublishDir}*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startupicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Flags: nowait

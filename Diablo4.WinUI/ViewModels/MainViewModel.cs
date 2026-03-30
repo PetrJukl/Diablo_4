@@ -180,7 +180,7 @@ public partial class MainViewModel : ObservableObject
 
     private static string FormatDetailedDuration(TimeSpan duration)
     {
-        return $"{FormatTimeUnit(duration.Days, "den", "dny", "dní")}, {FormatTimeUnit(duration.Hours, "hodina", "hodiny", "hodin")},\n  {FormatTimeUnit(duration.Minutes, "minuta", "minuty", "minut")}, {FormatTimeUnit(duration.Seconds, "vteřina", "vteřiny", "vteřin")} a {FormatTimeUnit(duration.Milliseconds, "milisekunda", "milisekundy", "milisekund")}";
+        return $"{FormatTimeUnit(duration.Days, "den", "dny", "dní")}, {FormatTimeUnit(duration.Hours, "hodina", "hodiny", "hodin")},\n  {FormatTimeUnit(duration.Minutes, "minuta", "minuty", "minut")}, {FormatTimeUnit(duration.Seconds, "vteřina", "vteřiny", "vteřin")} a {duration.Milliseconds} miliseků";
     }
 
     private static string FormatSummaryDuration(TimeSpan duration)
