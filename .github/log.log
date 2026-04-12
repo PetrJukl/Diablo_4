@@ -63,3 +63,20 @@
 - doplněn MSTest pro ověření smazání starého installeru a přepsání aktuálního; ověření po změně: `run_build` úspěšný, testy `Diablo4.WinUI.Tests.dll` prošly 11/11
 - update adresář sjednocen z `LocalApplicationData\KontrolaParby\Updates` na `LocalApplicationData\Diablo Log\Updates`, aby byl pod stejným kořenem jako aplikační logy
 - upraveny explicitní očekávané cesty v `Diablo4.WinUI.Tests/Services/UpdateServiceTests.cs`; ověření po změně: relevantní testy `UpdateServiceTests` prošly 7/7 a `run_build` byl úspěšný
+
+2026-04-12 Security audit – 14 nalezených problémů opraveno
+- H1 `UpdateService`: `HttpClient` rozdělen na `ManifestHttpClient` (15s timeout) a `DownloadHttpClient` (InfiniteTimeSpan) – download velkých souborů přestal timeoutovat
+- H2 `UpdateService`: `CleanupDownloadedInstallers` – `Directory.CreateDirectory` + `Directory.GetFiles` nově obaleny try-catch s logováním (dříve crash při nedostupné cestě)
+- H3 `FileHelper.EnsureFileExists`: celé tělo obaleno try-catch (`IOException`, `UnauthorizedAccessException`) s `AppDiagnostics.LogWarning` – dříve crash bez logu
+- H4 `App.xaml.cs`: `StartupErrorLogPath` přesunuto z `%TEMP%` (world-readable) do `%LOCALAPPDATA%\Diablo Log\` + `LogStartupException` zajišťuje `CreateDirectory` + zachytí `UnauthorizedAccessException`
+- L4 `App.xaml.cs`: `_singleInstanceMutex` nově uvolněn (`ReleaseMutex` + `Dispose`) v handleru `MainWindow.Closed`
+- M1 `ProcessMonitor`: `_isCheckingTabs` a `_isWebRunning` označeny `volatile` (dříve bez záruky viditelnosti mezi DispatcherQueue a Task.Run vláknem)
+- M2 `ProcessMonitor.CheckAllOpenTabsForUdemy`: `Process.GetProcesses()` výsledek uložen a všechny procesy `Dispose()`d v `finally`; bare `catch` nahrazen `InvalidOperationException` + `Win32Exception`
+- M3 `ProcessMonitor`: přidán helper `GetWeeksInYear(int year)` s `new DateTime(year, 12, 31)` místo `DateTime.Parse("31.12.{year}")` – culture-safe, žádný crash na en-US systémech
+- M4 `WeekendMotivationDialog.IsProcessRunning`: výsledek `Process.GetProcessesByName` uložen, procesy `Dispose()`d v `finally`
+- M5 `MainViewModel.UpdateStatsTimerTick`: přidán fallback `catch (Exception ex)` za stávající typed catch bloky
+- M6 `ProcessMonitor.GetFileLength`: přidán `UnauthorizedAccessException` catch vedle stávajícího `IOException`
+- L1 `UpdateNotificationWindow`: `[DllImport]` doplněn o `SetLastError = true`; oba volání `SetWindowPos` nyní kontrolují návratovou hodnotu a logují Win32 chybu
+- L3 `UpdateService.DownloadAndInstallAsync`: doplněna `else` větev s `AppDiagnostics.LogWarning` při chybějícím SHA-256 v manifestu
+- L5 `WeekendMotivationDialog`: opraveny všechny Mojibake řetězce (poškozené české diakritikou) na správné UTF-8
+- ověření: `dotnet test ... -p:Platform=x64 -v minimal` → 21/21 testů zelených

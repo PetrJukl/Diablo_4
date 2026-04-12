@@ -71,7 +71,10 @@ internal sealed class UpdateNotificationWindow : Window
             presenter.IsMinimizable = false;
         }
 
-        SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize);
+        if (!SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize))
+        {
+            AppDiagnostics.LogWarning($"SetWindowPos (topmost init) selhal. Win32 chyba: {Marshal.GetLastWin32Error()}");
+        }
 
         appWindow.Changed += (_, args) =>
         {
@@ -82,7 +85,10 @@ internal sealed class UpdateNotificationWindow : Window
             DispatcherQueue.TryEnqueue(() =>
             {
                 _zOrderReassertQueued = false;
-                SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+                if (!SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate))
+                {
+                    AppDiagnostics.LogWarning($"SetWindowPos (topmost reassert) selhal. Win32 chyba: {Marshal.GetLastWin32Error()}");
+                }
             });
         };
     }
@@ -194,6 +200,6 @@ internal sealed class UpdateNotificationWindow : Window
         }
     }
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 }

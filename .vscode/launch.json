@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug KontrolaParby (x64)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build x64",
+            "program": "${workspaceFolder}/Diablo4.WinUI/bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64/KontrolaParby.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/Diablo4.WinUI/bin/x64/Debug/net8.0-windows10.0.19041.0/win-x64",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

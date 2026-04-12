@@ -132,6 +132,10 @@ public partial class MainViewModel : ObservableObject
         {
             AppDiagnostics.LogError("Aktualizace statistik skončila v neplatném stavu.", ex);
         }
+        catch (Exception ex)
+        {
+            AppDiagnostics.LogError("Neočekávaná chyba při aktualizaci statistik.", ex);
+        }
         finally
         {
             _isUpdatingStats = false;

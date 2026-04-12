@@ -55,17 +55,29 @@ public static class FileHelper
     {
         string appDataDirectory = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string appDirectory = Path.Combine(appDataDirectory, "Diablo Log");
-        Directory.CreateDirectory(appDirectory);
         string filePath = Path.Combine(appDirectory, fileName);
 
-        if (!File.Exists(filePath))
+        try
         {
-            File.Create(filePath).Close();
-        }
+            Directory.CreateDirectory(appDirectory);
 
-        if (new FileInfo(filePath).Length == 0)
+            if (!File.Exists(filePath))
+            {
+                File.Create(filePath).Close();
+            }
+
+            if (new FileInfo(filePath).Length == 0)
+            {
+                File.WriteAllText(filePath, FormatLastPlayedTimestamp(DateTime.Now) + Environment.NewLine);
+            }
+        }
+        catch (IOException ex)
         {
-            File.WriteAllText(filePath, FormatLastPlayedTimestamp(DateTime.Now) + Environment.NewLine);
+            AppDiagnostics.LogWarning($"Nepodařilo se inicializovat log soubor '{filePath}'.", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning($"Přístup k log souboru '{filePath}' byl odmítnut.", ex);
         }
 
         return filePath;

@@ -56,7 +56,7 @@ public sealed partial class WeekendMotivationDialog : Window
         };
     }
 
-    /// <summary>Zobrazí okno a èeká na jeho zavøení.</summary>
+    /// <summary>ZobrazÃ­ okno a ÄekÃ¡ na jeho zavÅ™enÃ­.</summary>
     public Task ShowAndWaitAsync()
     {
         ConfigureWindow();
@@ -86,7 +86,7 @@ public sealed partial class WeekendMotivationDialog : Window
             }
             catch (InvalidOperationException ex)
             {
-                AppDiagnostics.LogWarning("Nepodaøilo se korektnì zavøít weekend dialog.", ex);
+                AppDiagnostics.LogWarning("NepodaÅ™ilo se korektnÄ› zavÅ™Ã­t weekend dialog.", ex);
             }
         });
     }
@@ -111,7 +111,7 @@ public sealed partial class WeekendMotivationDialog : Window
             presenter.IsMinimizable = false;
         }
 
-        // Prùhledná caption tlaèítka – splıvají s obrázkem
+        // PrÅ¯hlednÃ¡ caption tlaÄÃ­tka â€“ splÃ½vajÃ­ s obrÃ¡zkem
         var titleBar = appWindow.TitleBar;
         titleBar.ButtonBackgroundColor = new Color { A = 0, R = 0, G = 0, B = 0 };
         titleBar.ButtonHoverBackgroundColor = new Color { A = 60, R = 255, G = 255, B = 255 };
@@ -149,7 +149,7 @@ public sealed partial class WeekendMotivationDialog : Window
         {
             if (!_isClosed)
             {
-                await ShowMessageAsync("Vyhledání hry bylo pøerušeno", "Nepodaøilo se vèas najít spustitelnı soubor vybrané hry.");
+                await ShowMessageAsync("VyhledÃ¡nÃ­ hry bylo pÅ™eruÅ¡eno", "NepodaÅ™ilo se vÄas najÃ­t spustitelnÃ½ soubor vybranÃ© hry.");
             }
 
             return;
@@ -172,8 +172,8 @@ public sealed partial class WeekendMotivationDialog : Window
         {
             if (!ExecutableLaunchPolicy.IsTrustedExecutablePath(executablePath, SearchRoots))
             {
-                AppDiagnostics.LogWarning($"Spuštìní hry bylo zablokováno kvùli nedùvìryhodné cestì '{executablePath}'.");
-                await ShowMessageAsync("Spuštìní zablokováno", "Nalezenı spustitelnı soubor není v dùvìryhodném umístìní.");
+                AppDiagnostics.LogWarning($"SpuÅ¡tÄ›nÃ­ hry bylo zablokovÃ¡no kvÅ¯li nedÅ¯vÄ›ryhodnÃ© cestÄ› '{executablePath}'.");
+                await ShowMessageAsync("SpuÅ¡tÄ›nÃ­ zablokovÃ¡no", "NalezenÃ½ spustitelnÃ½ soubor nenÃ­ v dÅ¯vÄ›ryhodnÃ©m umÃ­stÄ›nÃ­.");
                 return;
             }
 
@@ -182,20 +182,20 @@ public sealed partial class WeekendMotivationDialog : Window
                 var startedProcess = Process.Start(new ProcessStartInfo(executablePath) { UseShellExecute = true });
                 if (startedProcess is null)
                 {
-                    throw new InvalidOperationException("Vybranou hru se nepodaøilo spustit.");
+                    throw new InvalidOperationException("Vybranou hru se nepodaÅ™ilo spustit.");
                 }
 
                 Close();
             }
             catch (Win32Exception ex)
             {
-                AppDiagnostics.LogError($"Spuštìní hry '{selectedGame}' selhalo.", ex);
-                await ShowMessageAsync("Spuštìní selhalo", "Vybranou hru se nepodaøilo spustit.");
+                AppDiagnostics.LogError($"SpuÅ¡tÄ›nÃ­ hry '{selectedGame}' selhalo.", ex);
+                await ShowMessageAsync("SpuÅ¡tÄ›nÃ­ selhalo", "Vybranou hru se nepodaÅ™ilo spustit.");
             }
             catch (InvalidOperationException ex)
             {
-                AppDiagnostics.LogError($"Spuštìní hry '{selectedGame}' skonèilo v neplatném stavu.", ex);
-                await ShowMessageAsync("Spuštìní selhalo", "Vybranou hru se nepodaøilo spustit.");
+                AppDiagnostics.LogError($"SpuÅ¡tÄ›nÃ­ hry '{selectedGame}' skonÄilo v neplatnÃ©m stavu.", ex);
+                await ShowMessageAsync("SpuÅ¡tÄ›nÃ­ selhalo", "Vybranou hru se nepodaÅ™ilo spustit.");
             }
         }
         else if (IsProcessRunning(processName))
@@ -207,7 +207,7 @@ public sealed partial class WeekendMotivationDialog : Window
             var dialog = new ContentDialog
             {
                 Title = "Chyba",
-                Content = "Spustitelnı soubor pro vybranou hru nebyl nalezen.",
+                Content = "SpustitelnÃ½ soubor pro vybranou hru nebyl nalezen.",
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
@@ -286,8 +286,18 @@ public sealed partial class WeekendMotivationDialog : Window
         return string.Empty;
     }
 
-    private static bool IsProcessRunning(string processName) =>
-        Process.GetProcessesByName(processName).Length > 0;
+    private static bool IsProcessRunning(string processName)
+    {
+        var processes = Process.GetProcessesByName(processName);
+        try
+        {
+            return processes.Length > 0;
+        }
+        finally
+        {
+            foreach (var p in processes) p.Dispose();
+        }
+    }
 
     private async Task ShowMessageAsync(string title, string content)
     {

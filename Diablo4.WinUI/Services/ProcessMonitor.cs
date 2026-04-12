@@ -2,6 +2,7 @@ using Diablo4.WinUI.Helpers;
 using Diablo4.WinUI.Models;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -29,8 +30,8 @@ public class ProcessMonitor
     private long _cachedFileLength = -1;
     private bool _durationsDirty = true;
 
-    private bool _isWebRunning = false;
-    private bool _isCheckingTabs = false;
+    private volatile bool _isWebRunning = false;
+    private volatile bool _isCheckingTabs = false;
     private volatile bool _isProcessing;
     private volatile bool _isRunning;
     public bool IsRunning => _isRunning;
@@ -230,6 +231,14 @@ public class ProcessMonitor
         return CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(time, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
     }
 
+    private int GetWeeksInYear(int year)
+    {
+        var dec31 = new DateTime(year, 12, 31);
+        return GetIso8601WeekOfYear(dec31) != 1
+            ? GetIso8601WeekOfYear(dec31)
+            : GetIso8601WeekOfYear(new DateTime(year, 12, 27));
+    }
+
     public WeeklyDurations GetDurations(string filePath, int actualWeekOfYear)
     {
         int actualYear = DateTime.Now.Year;
@@ -261,9 +270,7 @@ public class ProcessMonitor
     {
         var weeklyDurations = new TimeSpan();
         var lastWeekDuration = new TimeSpan();
-        int weeksInLastYear = GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) != 1 
-            ? GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) 
-            : GetIso8601WeekOfYear(DateTime.Parse($"27.12.{actualYear - 1}"));
+        int weeksInLastYear = GetWeeksInYear(actualYear - 1);
 
         var lines = ReadAllLinesShared(filePath);
 
@@ -326,9 +333,7 @@ public class ProcessMonitor
             return durations with { ThisWeek = durations.ThisWeek + activeDuration };
         }
 
-        int weeksInLastYear = GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}")) != 1
-            ? GetIso8601WeekOfYear(DateTime.Parse($"31.12.{actualYear - 1}"))
-            : GetIso8601WeekOfYear(DateTime.Parse($"27.12.{actualYear - 1}"));
+        int weeksInLastYear = GetWeeksInYear(actualYear - 1);
 
         if (actualWeekOfYear == 1 && activeWeekOfYear == weeksInLastYear && activeSessionStartTime.Year == actualYear - 1)
         {
@@ -354,18 +359,36 @@ public class ProcessMonitor
         if (_isCheckingTabs) return;
         _isCheckingTabs = true;
 
+        Process[]? allProcesses = null;
         try
         {
-            _isWebRunning = Process.GetProcesses()
+            allProcesses = Process.GetProcesses();
+            _isWebRunning = allProcesses
                 .Where(p => p.ProcessName is "firefox" or "chrome" or "msedge")
                 .Any(p =>
                 {
                     try { return p.MainWindowTitle.Contains("udemy", StringComparison.OrdinalIgnoreCase); }
-                    catch { return false; }
+                    catch (InvalidOperationException) { return false; }
+                    catch (Win32Exception) { return false; }
                 });
+        }
+        catch (InvalidOperationException ex)
+        {
+            AppDiagnostics.LogWarning("Nepodařilo se zjistit procesy prohlížeče pro kontrolu Udemy.", ex);
+        }
+        catch (Win32Exception ex)
+        {
+            AppDiagnostics.LogWarning("Systémová chyba při zjišťování procesů prohlížeče.", ex);
         }
         finally
         {
+            if (allProcesses != null)
+            {
+                foreach (var p in allProcesses)
+                {
+                    p.Dispose();
+                }
+            }
             _isCheckingTabs = false;
         }
     }
@@ -379,6 +402,11 @@ public class ProcessMonitor
         catch (IOException ex)
         {
             AppDiagnostics.LogWarning($"Nepodařilo se získat délku souboru '{filePath}'.", ex);
+            return 0;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning($"Přístup k souboru '{filePath}' byl odmítnut při zjišťování délky.", ex);
             return 0;
         }
     }

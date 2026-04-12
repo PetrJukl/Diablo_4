@@ -14,7 +14,8 @@ namespace Diablo4.WinUI.Services;
 
 public sealed class UpdateService
 {
-    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient ManifestHttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient DownloadHttpClient = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
     private const string DefaultInstallerFileName = "KontrolaParbySetup.exe";
     private const string UpdatesDirectoryName = "Updates";
     private const string UpdatesRootDirectoryName = "Diablo Log";
@@ -38,8 +39,8 @@ public sealed class UpdateService
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, manifestUri);
-            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var manifestRequest = new HttpRequestMessage(HttpMethod.Get, manifestUri);
+            using var response = await ManifestHttpClient.SendAsync(manifestRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
             if (response.RequestMessage?.RequestUri is not { } finalManifestUri
                 || !UpdateSourcePolicy.IsTrustedManifestUri(finalManifestUri))
@@ -122,8 +123,8 @@ public sealed class UpdateService
         var destinationPath = GetDownloadDestinationPath(downloadUri);
         CleanupDownloadedInstallers(destinationPath);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, downloadUri);
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var downloadRequest = new HttpRequestMessage(HttpMethod.Get, downloadUri);
+        using var response = await DownloadHttpClient.SendAsync(downloadRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         if (response.RequestMessage?.RequestUri is not { } finalDownloadUri
@@ -190,6 +191,10 @@ public sealed class UpdateService
         {
             await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, cancellationToken);
         }
+        else
+        {
+            AppDiagnostics.LogWarning("Manifest neobsahuje SHA-256 otisk. Integrita installeru nebyla ověřena.");
+        }
 
         await ApplyUpdateAsync(installerPath, cancellationToken);
     }
@@ -243,9 +248,39 @@ public sealed class UpdateService
     private static void CleanupDownloadedInstallers(string? preservedInstallerPath = null)
     {
         var updatesDirectory = GetUpdatesDirectoryPath();
-        Directory.CreateDirectory(updatesDirectory);
 
-        foreach (var filePath in Directory.GetFiles(updatesDirectory))
+        try
+        {
+            Directory.CreateDirectory(updatesDirectory);
+        }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning($"Nepodařilo se vytvořit adresář pro aktualizace '{updatesDirectory}'.", ex);
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning($"Přístup k adresáři pro aktualizace '{updatesDirectory}' byl odmítnut.", ex);
+            return;
+        }
+
+        string[] files;
+        try
+        {
+            files = Directory.GetFiles(updatesDirectory);
+        }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning("Nepodařilo se načíst soubory v adresáři pro aktualizace.", ex);
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning("Přístup k adresáři pro aktualizace byl odmítnut.", ex);
+            return;
+        }
+
+        foreach (var filePath in files)
         {
             if (!string.IsNullOrWhiteSpace(preservedInstallerPath)
                 && string.Equals(filePath, preservedInstallerPath, StringComparison.OrdinalIgnoreCase))

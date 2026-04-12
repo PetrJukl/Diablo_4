@@ -13,7 +13,10 @@ namespace Diablo4.WinUI;
 
 public partial class App : Application
 {
-    private static readonly string StartupErrorLogPath = Path.Combine(Path.GetTempPath(), "Diablo4.WinUI.startup.log");
+    private static readonly string StartupErrorLogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Diablo Log",
+        "Diablo4.WinUI.startup.log");
     private static Mutex? _singleInstanceMutex;
 
     public static MainWindow? MainWindow { get; private set; }
@@ -53,6 +56,7 @@ public partial class App : Application
     {
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(StartupErrorLogPath)!);
             File.AppendAllText(
                 StartupErrorLogPath,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {source}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
@@ -60,6 +64,10 @@ public partial class App : Application
         catch (IOException ioEx)
         {
             Debug.WriteLine(ioEx);
+        }
+        catch (UnauthorizedAccessException uae)
+        {
+            Debug.WriteLine(uae);
         }
     }
 
@@ -77,6 +85,12 @@ public partial class App : Application
         try
         {
             MainWindow = new MainWindow();
+            MainWindow.Closed += (_, _) =>
+            {
+                try { _singleInstanceMutex?.ReleaseMutex(); } catch (ApplicationException) { }
+                _singleInstanceMutex?.Dispose();
+                _singleInstanceMutex = null;
+            };
             MainWindow.Activate();
         }
         catch (Exception ex)
