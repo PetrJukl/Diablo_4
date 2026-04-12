@@ -292,9 +292,10 @@ public sealed class UpdateService
             {
                 File.Delete(filePath);
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-                AppDiagnostics.LogWarning($"Nepodařilo se smazat starý update soubor '{filePath}'.", ex);
+                // Soubor může být dočasně zamčen (např. installer ještě běží) – přeskočíme, smažeme při příštím startu.
+                AppDiagnostics.LogInfo($"Update soubor '{filePath}' je dočasně zamčen, bude smazán při příštím startu.");
             }
             catch (UnauthorizedAccessException ex)
             {
