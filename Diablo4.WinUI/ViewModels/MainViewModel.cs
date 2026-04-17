@@ -53,19 +53,11 @@ public partial class MainViewModel : ObservableObject
         _messageUpdateTimer.Start();
 
         bool shouldCheckWeb = MachineContextHelper.ShouldCheckWebContent();
+        string[] trackedProcessNames = [.. TrackedApplications.AllProcessNames];
         _processMonitor = new ProcessMonitor(
             _filePath,
             shouldCheckWeb,
-            "Diablo IV",
-            "DragonAgeInquisition",
-            "Diablo III64",
-            "Code",
-            "Dragon Age The Veilguard",
-            "DragonAge2",
-            "daorigins",
-            "devenv",
-            "WindowsTerminal",
-            "OpenConsole"
+            trackedProcessNames
         );
         _processMonitor.Start(dispatcherQueue);
 

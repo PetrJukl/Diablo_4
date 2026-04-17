@@ -1,9 +1,9 @@
 using Diablo4.WinUI.Helpers;
+using Diablo4.WinUI.Models;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
@@ -23,13 +23,6 @@ public sealed partial class WeekendMotivationDialog : Window
     private readonly CancellationTokenSource _cts = new();
     private bool _isClosed;
     private bool _isLaunchInProgress;
-    private readonly List<string> _games =
-    [
-        "Diablo IV",
-        "Diablo III64",
-        "Dragon Age The Veilguard",
-        "DragonAgeInquisition"
-    ];
 
     private static readonly string[] SearchRoots =
     [
@@ -45,7 +38,7 @@ public sealed partial class WeekendMotivationDialog : Window
         Title = "WeekendMotivation";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        GamesComboBox.ItemsSource = _games;
+        GamesComboBox.ItemsSource = TrackedApplications.WeekendMotivationGames;
         GamesComboBox.SelectedIndex = 0;
         Closed += (_, _) =>
         {
@@ -134,9 +127,10 @@ public sealed partial class WeekendMotivationDialog : Window
         LaunchProgressRing.Visibility = Visibility.Visible;
         LaunchProgressRing.IsActive = true;
 
-        string selectedGame = GamesComboBox.SelectedItem as string ?? "Diablo IV";
-        string executableName = GetExecutableName(selectedGame);
-        string processName = Path.GetFileNameWithoutExtension(executableName);
+        TrackedApplicationDefinition selectedGame = GamesComboBox.SelectedItem as TrackedApplicationDefinition
+            ?? TrackedApplications.WeekendMotivationGames[0];
+        string executableName = selectedGame.ExecutableName ?? string.Empty;
+        string processName = selectedGame.LaunchProcessName ?? Path.GetFileNameWithoutExtension(executableName);
 
         string executablePath;
         try
@@ -189,12 +183,12 @@ public sealed partial class WeekendMotivationDialog : Window
             }
             catch (Win32Exception ex)
             {
-                AppDiagnostics.LogError($"Spuštění hry '{selectedGame}' selhalo.", ex);
+                AppDiagnostics.LogError($"Spuštění hry '{selectedGame.DisplayName}' selhalo.", ex);
                 await ShowMessageAsync("Spuštění selhalo", "Vybranou hru se nepodařilo spustit.");
             }
             catch (InvalidOperationException ex)
             {
-                AppDiagnostics.LogError($"Spuštění hry '{selectedGame}' skončilo v neplatném stavu.", ex);
+                AppDiagnostics.LogError($"Spuštění hry '{selectedGame.DisplayName}' skončilo v neplatném stavu.", ex);
                 await ShowMessageAsync("Spuštění selhalo", "Vybranou hru se nepodařilo spustit.");
             }
         }
@@ -219,15 +213,6 @@ public sealed partial class WeekendMotivationDialog : Window
     {
         RequestClose();
     }
-
-    private static string GetExecutableName(string gameName) => gameName switch
-    {
-        "Diablo IV" => "Diablo IV.exe",
-        "Diablo III64" => "Diablo III64.exe",
-        "Dragon Age The Veilguard" => "Dragon Age The Veilguard.exe",
-        "DragonAgeInquisition" => "DragonAgeInquisition.exe",
-        _ => string.Empty
-    };
 
     private static async Task<string> FindExecutablePathAsync(string executableName, CancellationToken ct)
     {
