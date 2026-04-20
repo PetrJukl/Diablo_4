@@ -21,8 +21,11 @@ public sealed partial class WeekendMotivationDialog : Window
     private static readonly ConcurrentDictionary<string, string> ExecutablePathCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly TaskCompletionSource _tcs = new();
     private readonly CancellationTokenSource _cts = new();
+    private readonly object _ctsLifetimeLock = new();
     private bool _isClosed;
     private bool _isLaunchInProgress;
+    private bool _ctsDisposed;
+    private bool _ctsDisposalPending;
 
     private static readonly string[] SearchRoots =
     [
@@ -43,8 +46,16 @@ public sealed partial class WeekendMotivationDialog : Window
         Closed += (_, _) =>
         {
             _isClosed = true;
-            _cts.Cancel();
-            _cts.Dispose();
+
+            try
+            {
+                _cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            DisposeCancellationSourceIfSafe();
             _tcs.TrySetResult();
         };
     }
@@ -155,6 +166,7 @@ public sealed partial class WeekendMotivationDialog : Window
             LaunchProgressRing.Visibility = Visibility.Collapsed;
             AnoButton.IsEnabled = true;
             GamesComboBox.IsEnabled = true;
+            DisposeCancellationSourceIfSafe();
         }
 
         if (_isClosed)
@@ -169,6 +181,16 @@ public sealed partial class WeekendMotivationDialog : Window
                 AppDiagnostics.LogWarning($"Spuštění hry bylo zablokováno kvůli nedůvěryhodné cestě '{executablePath}'.");
                 await ShowMessageAsync("Spuštění zablokováno", "Nalezený spustitelný soubor není v důvěryhodném umístění.");
                 return;
+            }
+
+            if (!AuthenticodeVerifier.IsTrustedAuthenticodeSigned(executablePath))
+            {
+                AppDiagnostics.LogWarning($"Spustitelný soubor '{executablePath}' není digitálně podepsaný.");
+                bool userApproved = await ConfirmUnsignedExecutableAsync(selectedGame.DisplayName, executablePath);
+                if (!userApproved || _isClosed)
+                {
+                    return;
+                }
             }
 
             try
@@ -282,6 +304,59 @@ public sealed partial class WeekendMotivationDialog : Window
         {
             foreach (var p in processes) p.Dispose();
         }
+    }
+
+    private void DisposeCancellationSourceIfSafe()
+    {
+        lock (_ctsLifetimeLock)
+        {
+            if (_ctsDisposed)
+            {
+                return;
+            }
+
+            if (_isLaunchInProgress)
+            {
+                _ctsDisposalPending = true;
+                return;
+            }
+
+            if (!_isClosed && !_ctsDisposalPending)
+            {
+                return;
+            }
+
+            try
+            {
+                _cts.Dispose();
+                _ctsDisposed = true;
+            }
+            catch (ObjectDisposedException)
+            {
+                _ctsDisposed = true;
+            }
+        }
+    }
+
+    private async Task<bool> ConfirmUnsignedExecutableAsync(string displayName, string executablePath)
+    {
+        if (_isClosed)
+        {
+            return false;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Hra není digitálně podepsaná",
+            Content = $"Spustitelný soubor hry '{displayName}' nemá platný Authenticode podpis.\n\nCesta: {executablePath}\n\nPřesto spustit?",
+            PrimaryButtonText = "Spustit",
+            CloseButtonText = "Zrušit",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
     }
 
     private async Task ShowMessageAsync(string title, string content)

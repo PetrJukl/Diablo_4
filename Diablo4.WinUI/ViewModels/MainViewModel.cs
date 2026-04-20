@@ -16,6 +16,9 @@ public partial class MainViewModel : ObservableObject
     private DispatcherQueueTimer? _statsUpdateTimer;
     private bool _lastKnownProcessRunningState;
     private bool _isUpdatingStats;
+    private int _consecutiveStatsErrors;
+    private bool _statsTimerStoppedDueToErrors;
+    private const int MaxConsecutiveStatsErrors = 10;
 
     [ObservableProperty]
     public partial string MessageText { get; set; } = "Text";
@@ -115,22 +118,43 @@ public partial class MainViewModel : ObservableObject
             // Check weekend motivation
             CheckWeekendMotivation();
             NotifyProcessRunningState(_processMonitor.IsRunning);
+            _consecutiveStatsErrors = 0;
         }
         catch (IOException ex)
         {
-            AppDiagnostics.LogWarning("Nepodařilo se načíst statistiky hraní.", ex);
+            HandleStatsError("Nepodařilo se načíst statistiky hraní.", ex, isWarning: true);
         }
         catch (InvalidOperationException ex)
         {
-            AppDiagnostics.LogError("Aktualizace statistik skončila v neplatném stavu.", ex);
+            HandleStatsError("Aktualizace statistik skončila v neplatném stavu.", ex, isWarning: false);
         }
         catch (Exception ex)
         {
-            AppDiagnostics.LogError("Neočekávaná chyba při aktualizaci statistik.", ex);
+            HandleStatsError("Neočekávaná chyba při aktualizaci statistik.", ex, isWarning: false);
         }
         finally
         {
             _isUpdatingStats = false;
+        }
+    }
+
+    private void HandleStatsError(string message, Exception exception, bool isWarning)
+    {
+        if (isWarning)
+        {
+            AppDiagnostics.LogWarning(message, exception);
+        }
+        else
+        {
+            AppDiagnostics.LogError(message, exception);
+        }
+
+        _consecutiveStatsErrors++;
+        if (_consecutiveStatsErrors >= MaxConsecutiveStatsErrors && !_statsTimerStoppedDueToErrors)
+        {
+            _statsTimerStoppedDueToErrors = true;
+            _statsUpdateTimer?.Stop();
+            AppDiagnostics.LogError($"Aktualizace statistik byla zastavena po {MaxConsecutiveStatsErrors} po sobě jdoucích chybách.", exception);
         }
     }
 

@@ -54,28 +54,51 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var hwnd = WindowNative.GetWindowHandle(this);
-        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-        _appWindow = AppWindow.GetFromWindowId(windowId);
-        _appWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "211668_controller_b_game_icon.ico"));
-        _appWindow.Resize(new SizeInt32(1245, 575));
-
-        var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
-        var workArea = displayArea.WorkArea;
-        _appWindow.Move(new PointInt32(
-            workArea.X + (workArea.Width - 1245) / 2,
-            workArea.Y + (workArea.Height - 575) / 2));
-
-        if (_appWindow.Presenter is OverlappedPresenter presenter)
+        try
         {
-            presenter.IsResizable = false;
-            presenter.IsMaximizable = false;
-            presenter.IsMinimizable = false;
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+            _appWindow = AppWindow.GetFromWindowId(windowId);
+
+            try
+            {
+                _appWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "211668_controller_b_game_icon.ico"));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                AppDiagnostics.LogWarning("Nepodařilo se nastavit ikonu hlavního okna.", ex);
+            }
+
+            _appWindow.Resize(new SizeInt32(1245, 575));
+
+            try
+            {
+                var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
+                var workArea = displayArea.WorkArea;
+                _appWindow.Move(new PointInt32(
+                    workArea.X + (workArea.Width - 1245) / 2,
+                    workArea.Y + (workArea.Height - 575) / 2));
+            }
+            catch (COMException ex)
+            {
+                AppDiagnostics.LogWarning("Nepodařilo se vycentrovat hlavní okno na obrazovku.", ex);
+            }
+
+            if (_appWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.IsResizable = false;
+                presenter.IsMaximizable = false;
+                presenter.IsMinimizable = false;
+            }
+
+            _appWindow.Closing += AppWindow_Closing;
+
+            _windowConfigured = true;
         }
-
-        _appWindow.Closing += AppWindow_Closing;
-
-        _windowConfigured = true;
+        catch (COMException ex)
+        {
+            AppDiagnostics.LogError("Konfigurace hlavního okna selhala. Aplikace pokračuje s výchozím rozložením.", ex);
+        }
     }
 
     private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)

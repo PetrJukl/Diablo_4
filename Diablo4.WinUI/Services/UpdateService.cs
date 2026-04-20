@@ -116,7 +116,7 @@ public sealed class UpdateService
         }
     }
 
-    public async Task<string> DownloadUpdateAsync(string downloadUrl, CancellationToken cancellationToken = default)
+    public async Task<string> DownloadUpdateAsync(string downloadUrl, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(downloadUrl);
 
@@ -138,6 +138,8 @@ public sealed class UpdateService
             throw new InvalidOperationException("Stažený balíček pochází z nedůvěryhodného zdroje.");
         }
 
+        var totalBytes = response.Content.Headers.ContentLength;
+
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var target = new FileStream(destinationPath, new FileStreamOptions
         {
@@ -146,7 +148,8 @@ public sealed class UpdateService
             Share = FileShare.None,
             Options = FileOptions.Asynchronous
         });
-        await source.CopyToAsync(target, cancellationToken);
+
+        await CopyStreamWithProgressAsync(source, target, totalBytes, progress, cancellationToken);
         await target.FlushAsync(cancellationToken);
 
         var downloadedInstaller = new FileInfo(destinationPath);
@@ -158,7 +161,37 @@ public sealed class UpdateService
         return destinationPath;
     }
 
-    public Task ApplyUpdateAsync(string installerPath, CancellationToken cancellationToken = default)
+    private static async Task CopyStreamWithProgressAsync(
+        Stream source,
+        Stream target,
+        long? totalBytes,
+        IProgress<double>? progress,
+        CancellationToken cancellationToken)
+    {
+        const int bufferSize = 81920;
+        var buffer = new byte[bufferSize];
+        long copiedBytes = 0;
+        int read;
+        double lastReported = -1;
+
+        while ((read = await source.ReadAsync(buffer.AsMemory(0, bufferSize), cancellationToken)) > 0)
+        {
+            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            copiedBytes += read;
+
+            if (progress is not null && totalBytes is > 0)
+            {
+                double percent = Math.Min(1.0, copiedBytes / (double)totalBytes.Value);
+                if (percent - lastReported >= 0.01 || percent >= 1.0)
+                {
+                    progress.Report(percent);
+                    lastReported = percent;
+                }
+            }
+        }
+    }
+
+    public Task<UpdateApplyResult> ApplyUpdateAsync(string installerPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -172,21 +205,33 @@ public sealed class UpdateService
             throw new InvalidOperationException("Instalační balíček má nepodporovanou příponu.");
         }
 
-        var startedProcess = Process.Start(new ProcessStartInfo(installerPath)
+        try
         {
-            WorkingDirectory = Path.GetDirectoryName(installerPath),
-            UseShellExecute = true
-        });
+            var startedProcess = Process.Start(new ProcessStartInfo(installerPath)
+            {
+                WorkingDirectory = Path.GetDirectoryName(installerPath),
+                UseShellExecute = true
+            });
 
-        if (startedProcess is null)
-        {
-            throw new InvalidOperationException("Instalační balíček se nepodařilo spustit.");
+            if (startedProcess is null)
+            {
+                throw new InvalidOperationException("Instalační balíček se nepodařilo spustit.");
+            }
+
+            return Task.FromResult(UpdateApplyResult.Started);
         }
-
-        return Task.CompletedTask;
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED - uživatel odmítl UAC výzvu; aplikace může pokračovat dál.
+            AppDiagnostics.LogInfo("Uživatel odmítl UAC výzvu instalátoru. Aktualizace nebyla aplikována.");
+            return Task.FromResult(UpdateApplyResult.UserCancelled);
+        }
     }
 
-    public async Task DownloadAndInstallAsync(UpdateManifest manifest, CancellationToken cancellationToken = default)
+    public async Task<UpdateApplyResult> DownloadAndInstallAsync(
+        UpdateManifest manifest,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
@@ -195,9 +240,13 @@ public sealed class UpdateService
             throw new InvalidOperationException("Manifest neobsahuje platný SHA-256 otisk balíčku. Aktualizace byla z bezpečnostních důvodů zastavena.");
         }
 
-        var installerPath = await DownloadUpdateAsync(manifest.DownloadUrl, cancellationToken);
-        await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, cancellationToken);
-        await ApplyUpdateAsync(installerPath, cancellationToken);
+        // Bezpečnostní safety net: i když není dodán token, omezit celý download flow na 5 minut.
+        using var safetyCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        safetyCts.CancelAfter(TimeSpan.FromMinutes(5));
+
+        var installerPath = await DownloadUpdateAsync(manifest.DownloadUrl, progress, safetyCts.Token);
+        await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, safetyCts.Token);
+        return await ApplyUpdateAsync(installerPath, safetyCts.Token);
     }
 
     private static async Task VerifyInstallerChecksumAsync(string installerPath, string expectedSha256, CancellationToken cancellationToken)
