@@ -1,8 +1,8 @@
 {
-  "LatestVersion": "1.0.0.22",
-  "DownloadUrl": "https://github.com/PetrJukl/Diablo_4/releases/download/v1.0.0.22/KontrolaParbySetup-1.0.0.22.exe",
-  "ReleaseNotes": "**Full Changelog**: https://github.com/PetrJukl/Diablo_4/compare/1.0.0.22...v1.0.0.22",
+  "LatestVersion": "1.0.0.23",
+  "DownloadUrl": "https://github.com/PetrJukl/Diablo_4/releases/download/v1.0.0.23/KontrolaParbySetup-1.0.0.23.exe",
+  "ReleaseNotes": "**Full Changelog**: https://github.com/PetrJukl/Diablo_4/compare/v1.0.0.22...v1.0.0.23",
   "MinimumVersion": "",
-  "ReleaseDate": "04/20/2026 16:55:52",
-  "Sha256": "606380992F9F737FB61130DBA7160861CA8CCDCC31A29AB8E93565EE11F48286"
+  "ReleaseDate": "04/20/2026 18:07:27",
+  "Sha256": "A44197A7C1346EE6773D2620918E6C08794160180886493263B8109AC084C570"
 }
