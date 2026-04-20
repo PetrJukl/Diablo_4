@@ -81,6 +81,40 @@ public class UpdateSourcePolicyTests
     }
 
     [TestMethod]
+    public void IsTrustedDownloadUri_WhenRedirectTargetsReleaseAssetStorageBackend_ReturnsTrue()
+    {
+        // GitHub release assety přesměrovávají na storage backend, kde URL
+        // obsahuje číselné repo ID místo owner/repo segmentu.
+        var redirectTarget = new Uri("https://objects.githubusercontent.com/github-production-release-asset-2e65be/123456789/abcdef-uuid?token=xyz");
+
+        var result = UpdateSourcePolicy.IsTrustedDownloadUri(redirectTarget);
+
+        Assert.IsTrue(result);
+    }
+
+    [TestMethod]
+    public void IsTrustedManifestUri_WhenHostIsStorageBackendButPathHasNoOwnerRepoPrefix_ReturnsFalse()
+    {
+        // Manifest URL musí vždy obsahovat path prefix vlastního repozitáře –
+        // storage backend bez prefixu nesmí být přijat jako manifest source.
+        var storageWithoutPrefix = new Uri("https://objects.githubusercontent.com/github-production-release-asset-2e65be/123456789/abcdef-uuid?token=xyz");
+
+        var result = UpdateSourcePolicy.IsTrustedManifestUri(storageWithoutPrefix);
+
+        Assert.IsFalse(result);
+    }
+
+    [TestMethod]
+    public void IsTrustedDownloadUri_WhenHostIsUntrusted_ReturnsFalse()
+    {
+        var untrusted = new Uri("https://evil.example.com/PetrJukl/Diablo_4/setup.exe");
+
+        var result = UpdateSourcePolicy.IsTrustedDownloadUri(untrusted);
+
+        Assert.IsFalse(result);
+    }
+
+    [TestMethod]
     public void IsValidSha256_WhenValueHas64HexCharacters_ReturnsTrue()
     {
         var result = UpdateSourcePolicy.IsValidSha256("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");

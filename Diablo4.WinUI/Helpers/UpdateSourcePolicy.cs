@@ -21,6 +21,17 @@ internal static class UpdateSourcePolicy
     ];
 
     /// <summary>
+    /// Hostname suffixy storage backendu pro release assety. Tyto adresy
+    /// neobsahují owner/repo segment v cestě (místo toho číselné repo ID),
+    /// takže se na nich path prefix whitelist NEUPLATŇUJE. Použít jen pro
+    /// stahování binárky chráněné povinným SHA-256 ověřením.
+    /// </summary>
+    private static readonly string[] StorageBackendHostSuffixes =
+    [
+        ".githubusercontent.com"
+    ];
+
+    /// <summary>
     /// Whitelist povolených prefixů cest na důvěryhodných GitHub hostech.
     /// Brání zneužití přes jiný uživatelský repozitář na stejném hostu.
     /// </summary>
@@ -49,15 +60,24 @@ internal static class UpdateSourcePolicy
 
     internal static bool IsTrustedManifestUri(Uri uri)
     {
-        return IsTrustedGitHubUri(uri);
+        return IsTrustedGitHubUri(uri, allowStorageBackendWithoutPathPrefix: false);
     }
 
     internal static bool IsTrustedDownloadUri(Uri uri)
     {
-        return IsTrustedGitHubUri(uri);
+        // Stažení release assetu redirectuje GitHub na storage backend
+        // (objects.githubusercontent.com), kde URL místo "/owner/repo/" obsahuje
+        // číselné repo ID. Path prefix whitelist tam nelze uplatnit – integritu
+        // zajišťuje povinné SHA-256 ověření v UpdateService.DownloadAndInstallAsync.
+        return IsTrustedGitHubUri(uri, allowStorageBackendWithoutPathPrefix: true);
     }
 
     internal static bool IsTrustedGitHubUri(Uri uri)
+    {
+        return IsTrustedGitHubUri(uri, allowStorageBackendWithoutPathPrefix: false);
+    }
+
+    private static bool IsTrustedGitHubUri(Uri uri, bool allowStorageBackendWithoutPathPrefix)
     {
         ArgumentNullException.ThrowIfNull(uri);
 
@@ -74,6 +94,7 @@ internal static class UpdateSourcePolicy
         }
 
         bool isHostTrusted = false;
+        bool isStorageBackendHost = false;
 
         if (TrustedHosts.Contains(uri.Host))
         {
@@ -94,6 +115,23 @@ internal static class UpdateSourcePolicy
         if (!isHostTrusted)
         {
             return false;
+        }
+
+        if (allowStorageBackendWithoutPathPrefix)
+        {
+            foreach (var suffix in StorageBackendHostSuffixes)
+            {
+                if (uri.Host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    isStorageBackendHost = true;
+                    break;
+                }
+            }
+
+            if (isStorageBackendHost)
+            {
+                return true;
+            }
         }
 
         foreach (var prefix in TrustedPathPrefixes)
