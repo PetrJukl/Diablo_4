@@ -7,6 +7,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -252,10 +254,16 @@ internal sealed class UpdateNotificationWindow : Window
             _errorText.Text = "Stažení aktualizace bylo zrušeno.";
             ResetUiAfterFailure();
         }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or HttpRequestException or IOException)
+        {
+            AppDiagnostics.LogError("Stažení nebo instalace aktualizace selhalo.", ex);
+            _errorText.Text = $"Instalaci se nepodařilo dokončit: {ex.Message}";
+            ResetUiAfterFailure();
+        }
         catch (Exception ex)
         {
             AppDiagnostics.LogError("Stažení nebo instalace aktualizace selhalo.", ex);
-            _errorText.Text = "Instalaci se nepodařilo dokončit. Zkuste to znovu.";
+            _errorText.Text = "Instalaci se nepodařilo dokončit. Zkuste to znovu. (Detaily v logu aplikace.)";
             ResetUiAfterFailure();
         }
     }
