@@ -10,9 +10,7 @@ public class ProcessMonitorTests
     [TestMethod]
     public void GetIso8601WeekOfYear_WhenDateIsInFirstIsoWeek_ReturnsOne()
     {
-        var monitor = new ProcessMonitor(CreateLogFile(), false, "Diablo IV");
-
-        var result = monitor.GetIso8601WeekOfYear(new DateTime(2026, 1, 1));
+        var result = ProcessMonitor.GetIso8601WeekOfYear(new DateTime(2026, 1, 1));
 
         Assert.AreEqual(1, result);
     }
@@ -22,7 +20,7 @@ public class ProcessMonitorTests
     {
         var now = DateTime.Now;
         var monitor = new ProcessMonitor(CreateLogFile(), false, "Diablo IV");
-        var currentWeek = monitor.GetIso8601WeekOfYear(now);
+        var currentWeek = ProcessMonitor.GetIso8601WeekOfYear(now);
         var expected = TimeSpan.FromMinutes(30);
         var filePath = CreateLogFile($"{currentWeek}||{now:dd-MM-yyyy HH:mm:ss}||{expected.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
 
@@ -37,8 +35,8 @@ public class ProcessMonitorTests
         var now = DateTime.Now;
         var previousWeekDate = now.AddDays(-7);
         var monitor = new ProcessMonitor(CreateLogFile(), false, "Diablo IV");
-        var currentWeek = monitor.GetIso8601WeekOfYear(now);
-        var previousWeek = monitor.GetIso8601WeekOfYear(previousWeekDate);
+        var currentWeek = ProcessMonitor.GetIso8601WeekOfYear(now);
+        var previousWeek = ProcessMonitor.GetIso8601WeekOfYear(previousWeekDate);
         var expected = TimeSpan.FromMinutes(45);
         var filePath = CreateLogFile($"{previousWeek}||{previousWeekDate:dd-MM-yyyy HH:mm:ss}||{expected.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
 
@@ -52,7 +50,7 @@ public class ProcessMonitorTests
     {
         var now = DateTime.Now;
         var monitor = new ProcessMonitor(CreateLogFile(), false, "Diablo IV");
-        var currentWeek = monitor.GetIso8601WeekOfYear(now);
+        var currentWeek = ProcessMonitor.GetIso8601WeekOfYear(now);
         var expected = TimeSpan.FromMinutes(15);
         var culture = System.Globalization.CultureInfo.GetCultureInfo("cs-CZ");
         var filePath = CreateLogFile($"{currentWeek}||{now:dd-MM-yyyy HH:mm:ss}||{expected.TotalSeconds.ToString(culture)}");

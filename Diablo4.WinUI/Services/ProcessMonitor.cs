@@ -15,6 +15,8 @@ namespace Diablo4.WinUI.Services;
 
 public class ProcessMonitor
 {
+    private static readonly string[] LogFieldSeparator = ["||"];
+
     private DispatcherQueueTimer? _timer;
     private DispatcherQueueTimer? _webTimer;
     private readonly HashSet<string> _processNames;
@@ -220,7 +222,7 @@ public class ProcessMonitor
         _durationsDirty = true;
     }
 
-    public int GetIso8601WeekOfYear(DateTime time)
+    public static int GetIso8601WeekOfYear(DateTime time)
     {
         DayOfWeek day = CultureInfo.InvariantCulture.Calendar.GetDayOfWeek(time);
         if (day >= DayOfWeek.Monday && day <= DayOfWeek.Wednesday)
@@ -231,7 +233,7 @@ public class ProcessMonitor
         return CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(time, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday);
     }
 
-    private int GetWeeksInYear(int year)
+    private static int GetWeeksInYear(int year)
     {
         var dec31 = new DateTime(year, 12, 31);
         return GetIso8601WeekOfYear(dec31) != 1
@@ -276,8 +278,7 @@ public class ProcessMonitor
 
         foreach (var line in lines)
         {
-            string[] separator = new string[] { "||" };
-            var parts = line.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+            var parts = line.Split(LogFieldSeparator, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 3)
             {
                 continue;

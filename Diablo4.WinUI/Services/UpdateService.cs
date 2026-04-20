@@ -76,6 +76,11 @@ public sealed class UpdateService
                 return UpdateCheckResult.Error("Manifest obsahuje neplatný formát minimální verze.", currentVersion);
             }
 
+            if (string.IsNullOrWhiteSpace(manifest.Sha256))
+            {
+                return UpdateCheckResult.Error("Manifest neobsahuje povinný SHA-256 otisk balíčku.", currentVersion);
+            }
+
             if (!UpdateSourcePolicy.IsValidSha256(manifest.Sha256))
             {
                 return UpdateCheckResult.Error("Manifest obsahuje neplatný SHA-256 otisk balíčku.", currentVersion);
@@ -185,17 +190,13 @@ public sealed class UpdateService
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
+        if (string.IsNullOrWhiteSpace(manifest.Sha256) || !UpdateSourcePolicy.IsValidSha256(manifest.Sha256))
+        {
+            throw new InvalidOperationException("Manifest neobsahuje platný SHA-256 otisk balíčku. Aktualizace byla z bezpečnostních důvodů zastavena.");
+        }
+
         var installerPath = await DownloadUpdateAsync(manifest.DownloadUrl, cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(manifest.Sha256))
-        {
-            await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, cancellationToken);
-        }
-        else
-        {
-            AppDiagnostics.LogWarning("Manifest neobsahuje SHA-256 otisk. Integrita installeru nebyla ověřena.");
-        }
-
+        await VerifyInstallerChecksumAsync(installerPath, manifest.Sha256, cancellationToken);
         await ApplyUpdateAsync(installerPath, cancellationToken);
     }
 
@@ -228,13 +229,44 @@ public sealed class UpdateService
         var updatesDirectory = GetUpdatesDirectoryPath();
         Directory.CreateDirectory(updatesDirectory);
 
-        var fileName = Path.GetFileName(downloadUri.LocalPath);
-        if (string.IsNullOrWhiteSpace(fileName))
+        var fileName = SanitizeInstallerFileName(Path.GetFileName(downloadUri.LocalPath));
+
+        var combinedPath = Path.GetFullPath(Path.Combine(updatesDirectory, fileName));
+        var normalizedUpdatesDirectory = Path.GetFullPath(updatesDirectory) + Path.DirectorySeparatorChar;
+
+        if (!combinedPath.StartsWith(normalizedUpdatesDirectory, StringComparison.OrdinalIgnoreCase))
         {
-            fileName = DefaultInstallerFileName;
+            throw new InvalidOperationException("Cílová cesta instalačního balíčku směřuje mimo povolený adresář.");
         }
 
-        return Path.Combine(updatesDirectory, fileName);
+        return combinedPath;
+    }
+
+    private static string SanitizeInstallerFileName(string? rawFileName)
+    {
+        if (string.IsNullOrWhiteSpace(rawFileName))
+        {
+            return DefaultInstallerFileName;
+        }
+
+        if (rawFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return DefaultInstallerFileName;
+        }
+
+        if (rawFileName.Contains("..", StringComparison.Ordinal)
+            || rawFileName.Contains(Path.DirectorySeparatorChar)
+            || rawFileName.Contains(Path.AltDirectorySeparatorChar))
+        {
+            return DefaultInstallerFileName;
+        }
+
+        if (!UpdateSourcePolicy.HasSupportedInstallerExtension(rawFileName))
+        {
+            return DefaultInstallerFileName;
+        }
+
+        return rawFileName;
     }
 
     private static string GetUpdatesDirectoryPath()

@@ -80,3 +80,4 @@
 - L3 `UpdateService.DownloadAndInstallAsync`: doplněna `else` větev s `AppDiagnostics.LogWarning` při chybějícím SHA-256 v manifestu
 - L5 `WeekendMotivationDialog`: opraveny všechny Mojibake řetězce (poškozené české diakritikou) na správné UTF-8
 - ověření: `dotnet test ... -p:Platform=x64 -v minimal` → 21/21 testů zelených
+[2026-04-20 19:59:26] PLAN-2026-04-20 / Faze A hotova: A1 path-traversal guard + sanitizace, A2 povinne SHA-256, A3 GitHub path prefix whitelist, A4 rotace logu (2 MB / 3 gen) + FileShare.Read, A5 smazan BaseViewModel + MainPage.ViewModel, A6 ProcessMonitor static helpers. Build OK, 28/28 testu zelenych. Ceka schvaleni faze B.

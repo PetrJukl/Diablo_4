@@ -44,6 +44,43 @@ public class UpdateSourcePolicyTests
     }
 
     [TestMethod]
+    public void TryCreateTrustedDownloadUri_WhenPathBelongsToDifferentRepository_ReturnsFalse()
+    {
+        var result = UpdateSourcePolicy.TryCreateTrustedDownloadUri(
+            "https://github.com/Attacker/EvilRepo/releases/download/v1.0.0/KontrolaParbySetup.exe",
+            out _,
+            out var errorMessage);
+
+        Assert.IsFalse(result);
+        StringAssert.Contains(errorMessage, "GitHub");
+    }
+
+    [TestMethod]
+    public void TryCreateTrustedManifestUri_WhenPathBelongsToDifferentRepository_ReturnsFalse()
+    {
+        var result = UpdateSourcePolicy.TryCreateTrustedManifestUri(
+            "https://raw.githubusercontent.com/Attacker/EvilRepo/main/update-manifest.json",
+            out _,
+            out var errorMessage);
+
+        Assert.IsFalse(result);
+        StringAssert.Contains(errorMessage, "GitHub");
+    }
+
+    [TestMethod]
+    public void TryCreateTrustedManifestUri_WhenPathBelongsToOwnRepository_ReturnsTrue()
+    {
+        var result = UpdateSourcePolicy.TryCreateTrustedManifestUri(
+            "https://raw.githubusercontent.com/PetrJukl/Diablo_4/main/update-manifest.json",
+            out var uri,
+            out var errorMessage);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual("https://raw.githubusercontent.com/PetrJukl/Diablo_4/main/update-manifest.json", uri.AbsoluteUri);
+        Assert.AreEqual(string.Empty, errorMessage);
+    }
+
+    [TestMethod]
     public void IsValidSha256_WhenValueHas64HexCharacters_ReturnsTrue()
     {
         var result = UpdateSourcePolicy.IsValidSha256("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");

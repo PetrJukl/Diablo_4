@@ -20,6 +20,15 @@ internal static class UpdateSourcePolicy
         ".githubusercontent.com"
     ];
 
+    /// <summary>
+    /// Whitelist povolených prefixů cest na důvěryhodných GitHub hostech.
+    /// Brání zneužití přes jiný uživatelský repozitář na stejném hostu.
+    /// </summary>
+    private static readonly string[] TrustedPathPrefixes =
+    [
+        "/PetrJukl/Diablo_4/"
+    ];
+
     private static readonly HashSet<string> SupportedInstallerExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".exe",
@@ -64,14 +73,32 @@ internal static class UpdateSourcePolicy
             return false;
         }
 
+        bool isHostTrusted = false;
+
         if (TrustedHosts.Contains(uri.Host))
         {
-            return true;
+            isHostTrusted = true;
+        }
+        else
+        {
+            foreach (var suffix in TrustedHostSuffixes)
+            {
+                if (uri.Host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    isHostTrusted = true;
+                    break;
+                }
+            }
         }
 
-        foreach (var suffix in TrustedHostSuffixes)
+        if (!isHostTrusted)
         {
-            if (uri.Host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            return false;
+        }
+
+        foreach (var prefix in TrustedPathPrefixes)
+        {
+            if (uri.AbsolutePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

@@ -87,7 +87,7 @@ public partial class MainViewModel : ObservableObject
         {
             LoadCachedLastPlayedDateTime();
 
-            int currentWeekOfYear = _processMonitor.GetIso8601WeekOfYear(DateTime.Now);
+            int currentWeekOfYear = ProcessMonitor.GetIso8601WeekOfYear(DateTime.Now);
             var durations = _processMonitor.GetDurations(_filePath, currentWeekOfYear);
 
             if (durations.ThisWeek != TimeSpan.Zero)

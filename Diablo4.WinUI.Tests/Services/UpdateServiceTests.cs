@@ -1,5 +1,6 @@
 using Diablo4.WinUI.Services;
 using Diablo4.WinUI.Helpers;
+using Diablo4.WinUI.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net;
 using System.Net.Sockets;
@@ -42,6 +43,42 @@ public class UpdateServiceTests
         var installerPath = Path.Combine(Path.GetTempPath(), $"missing-installer-{Guid.NewGuid():N}.msix");
 
         await Assert.ThrowsExactlyAsync<FileNotFoundException>(() => service.ApplyUpdateAsync(installerPath));
+    }
+
+    [TestMethod]
+    public async Task DownloadAndInstallAsync_WhenSha256IsMissing_ThrowsInvalidOperationException()
+    {
+        var service = new UpdateService("https://example.invalid/manifest.json");
+        var manifest = new UpdateManifest
+        {
+            LatestVersion = "1.0.0.9",
+            DownloadUrl = "https://github.com/PetrJukl/Diablo_4/releases/download/v1.0.0.9/KontrolaParbySetup-1.0.0.9.exe",
+            Sha256 = string.Empty
+        };
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.DownloadAndInstallAsync(manifest));
+    }
+
+    [TestMethod]
+    public async Task DownloadAndInstallAsync_WhenSha256IsInvalid_ThrowsInvalidOperationException()
+    {
+        var service = new UpdateService("https://example.invalid/manifest.json");
+        var manifest = new UpdateManifest
+        {
+            LatestVersion = "1.0.0.9",
+            DownloadUrl = "https://github.com/PetrJukl/Diablo_4/releases/download/v1.0.0.9/KontrolaParbySetup-1.0.0.9.exe",
+            Sha256 = "not-a-valid-hex"
+        };
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.DownloadAndInstallAsync(manifest));
+    }
+
+    [TestMethod]
+    public async Task DownloadAndInstallAsync_WhenManifestIsNull_ThrowsArgumentNullException()
+    {
+        var service = new UpdateService("https://example.invalid/manifest.json");
+
+        await Assert.ThrowsExactlyAsync<ArgumentNullException>(() => service.DownloadAndInstallAsync(null!));
     }
 
     [TestMethod]

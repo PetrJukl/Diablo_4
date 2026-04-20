@@ -9,7 +9,5 @@ namespace Diablo4.WinUI.Views
         {
             this.InitializeComponent();
         }
-
-        public MainViewModel ViewModel => new();
     }
 }
