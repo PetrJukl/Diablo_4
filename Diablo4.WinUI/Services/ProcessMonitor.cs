@@ -384,7 +384,7 @@ public class ProcessMonitor
                 }
                 catch (Exception)
                 {
-                    // Proces mohl skončit nebo přístup k titulku selhal – přeskočit.
+                    // Proces mohl skončit nebo přístup k titulku selhal – přeskočit..
                 }
             }
 
