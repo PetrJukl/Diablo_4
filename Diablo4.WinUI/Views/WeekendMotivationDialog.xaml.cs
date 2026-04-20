@@ -19,6 +19,15 @@ namespace Diablo4.WinUI.Views;
 public sealed partial class WeekendMotivationDialog : Window
 {
     private static readonly ConcurrentDictionary<string, string> ExecutablePathCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Lazy<IPathCacheStore> PersistentPathCache = new(() => JsonPathCacheStore.CreateDefault());
+    private static readonly EnumerationOptions ExecutableEnumerationOptions = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        MaxRecursionDepth = 4,
+        AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.System,
+    };
+
     private readonly TaskCompletionSource _tcs = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly object _ctsLifetimeLock = new();
@@ -248,41 +257,47 @@ public sealed partial class WeekendMotivationDialog : Window
             return cachedPath;
         }
 
+        var persistent = PersistentPathCache.Value;
+        if (persistent.TryGet(executableName, out var persistedPath) && File.Exists(persistedPath))
+        {
+            ExecutablePathCache[executableName] = persistedPath;
+            return persistedPath;
+        }
+
         var result = await Task.Run(() =>
         {
             foreach (var root in SearchRoots)
             {
                 if (!Directory.Exists(root)) continue;
-                var result = SearchDirectory(root, executableName, maxDepth: 4, ct);
-                if (!string.IsNullOrEmpty(result))
-                    return result;
+
+                ct.ThrowIfCancellationRequested();
+                var match = SearchRoot(root, executableName, ct);
+                if (!string.IsNullOrEmpty(match))
+                {
+                    return match;
+                }
             }
+
             return string.Empty;
         }, ct);
 
         if (!string.IsNullOrWhiteSpace(result))
         {
             ExecutablePathCache[executableName] = result;
+            persistent.Set(executableName, result);
         }
 
         return result;
     }
 
-    private static string SearchDirectory(string directory, string executableName, int maxDepth, CancellationToken ct, int depth = 0)
+    private static string SearchRoot(string root, string executableName, CancellationToken ct)
     {
-        if (depth > maxDepth) return string.Empty;
         try
         {
-            ct.ThrowIfCancellationRequested();
-            string[] files = Directory.GetFiles(directory, executableName);
-            if (files.Length > 0)
-                return files[0];
-
-            foreach (string subDir in Directory.GetDirectories(directory))
+            foreach (var path in Directory.EnumerateFiles(root, executableName, ExecutableEnumerationOptions))
             {
-                var result = SearchDirectory(subDir, executableName, maxDepth, ct, depth + 1);
-                if (!string.IsNullOrEmpty(result))
-                    return result;
+                ct.ThrowIfCancellationRequested();
+                return path;
             }
         }
         catch (OperationCanceledException) { throw; }
@@ -290,6 +305,7 @@ public sealed partial class WeekendMotivationDialog : Window
         catch (DirectoryNotFoundException) { }
         catch (PathTooLongException) { }
         catch (IOException) { }
+
         return string.Empty;
     }
 

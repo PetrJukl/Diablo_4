@@ -2,7 +2,7 @@
 
 **Soubor:** `.github/plans/PLAN-2026-04-20-optimalizace-bezpecnost-stabilita.md`
 **Datum:** 2026-04-20
-**Stav:** `fáze A hotová – čeká schválení fáze B`
+**Stav:** `fáze C implementována – čeká manuální smoke + commit`
 
 ---
 
@@ -104,14 +104,14 @@ Iterativní přístup ve **třech fázích**, každá končí zelenými testy a 
 - [ ] Schválení uživatele před fází C
 
 ### Fáze C – Optimalizace
-- [ ] C1 – `GetProcessesByName` per name
-- [ ] C2 – jeden background loop místo `Task.Run` per tick
-- [ ] C3 – inkrementální parser logu + agregát
-- [ ] C4 – throttling zápisu aktivního sezení (30 s + při Stop)
-- [ ] C5 – `LastWriteTimeUtc` cache pro `_cachedLastPlayedDateTime`
-- [ ] C6 – `EnumerateFiles` + persistentní path cache
-- [ ] Unit testy: `ProcessMonitorTests` rozšíření o inkrementální načítání; nové testy pro persistent cache (přes abstrakci `IPathCacheStore`)
-- [ ] `dotnet test` zelený, manuální smoke (24h běh – ověřit log size, stabilní paměť, žádné nové errory v `.log`)
+- [x] C1 – `GetProcessesByName` per name
+- [x] C2 – jeden background loop místo `Task.Run` per tick
+- [x] C3 – inkrementální parser logu + agregát
+- [x] C4 – throttling zápisu aktivního sezení (30 s + při Stop)
+- [x] C5 – `LastWriteTimeUtc` cache pro `_cachedLastPlayedDateTime`
+- [x] C6 – `EnumerateFiles` + persistentní path cache
+- [x] Unit testy: `ProcessMonitorTests` rozšíření o inkrementální načítání; nové testy pro persistent cache (přes abstrakci `IPathCacheStore`)
+- [x] `dotnet test` zelený (45/45), manuální smoke (24h běh – ověřit log size, stabilní paměť, žádné nové errory v `.log`) – **ponechán uživateli k odsouhlasení**
 - [ ] Commit `perf: fáze C – optimalizace monitoringu a vyhledávání`
 
 ## Dotčené soubory

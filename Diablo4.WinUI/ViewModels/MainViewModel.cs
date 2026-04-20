@@ -32,6 +32,8 @@ public partial class MainViewModel : ObservableObject
     private TimeSpan _totalDuration = new TimeSpan();
     private bool _isWeekend = false;
     private DateTime? _cachedLastPlayedDateTime;
+    private DateTime _cachedLastPlayedFileWriteUtc = DateTime.MinValue;
+    private long _cachedLastPlayedFileLength = -1;
 
     public event EventHandler? WeekendMotivationRequested;
     public event EventHandler<bool>? ProcessRunningStateChanged;
@@ -165,8 +167,17 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // C5: přečíst první řádek jen když se soubor od minula změnil.
         try
         {
+            var info = new FileInfo(_filePath);
+            if (_cachedLastPlayedDateTime.HasValue
+                && info.LastWriteTimeUtc == _cachedLastPlayedFileWriteUtc
+                && info.Length == _cachedLastPlayedFileLength)
+            {
+                return;
+            }
+
             using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(stream);
             string? firstLine = reader.ReadLine();
@@ -174,6 +185,8 @@ public partial class MainViewModel : ObservableObject
             if (FileHelper.TryParseLastPlayedTimestamp(firstLine, out DateTime dt))
             {
                 _cachedLastPlayedDateTime = dt;
+                _cachedLastPlayedFileWriteUtc = info.LastWriteTimeUtc;
+                _cachedLastPlayedFileLength = info.Length;
             }
         }
         catch (IOException ex)

@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
@@ -16,25 +17,33 @@ namespace Diablo4.WinUI.Services;
 public class ProcessMonitor
 {
     private static readonly string[] LogFieldSeparator = ["||"];
+    private static readonly TimeSpan ActiveSessionFlushInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MonitorTickInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan WebTickInterval = TimeSpan.FromMilliseconds(5000);
+    private static readonly TimeSpan StopWaitTimeout = TimeSpan.FromSeconds(2);
 
-    private DispatcherQueueTimer? _timer;
     private DispatcherQueueTimer? _webTimer;
+    private Task? _monitorLoopTask;
     private readonly HashSet<string> _processNames;
     private readonly string _filePath;
     private DateTime? _processStartTime;
     private int _weekOfYear;
     private long _lastLogPosition = 0;
+    private DateTime _lastDurationFlushUtc = DateTime.MinValue;
     private DateTime? _firstDetectionTime;
     private CancellationTokenSource? _cancellationTokenSource;
-    private WeeklyDurations _cachedHistoricalDurations = new(TimeSpan.Zero, TimeSpan.Zero);
-    private int _cachedWeekOfYear = -1;
-    private int _cachedYear = -1;
-    private long _cachedFileLength = -1;
+
+    // Inkrementální agregát historických dob hraní (C3).
+    private TimeSpan _aggregatedThisWeek;
+    private TimeSpan _aggregatedLastWeek;
+    private int _aggregatedWeekOfYear = -1;
+    private int _aggregatedYear = -1;
+    private long _logReadPosition;
     private bool _durationsDirty = true;
+    private readonly object _aggregateLock = new();
 
     private volatile bool _isWebRunning = false;
     private int _isCheckingTabsFlag;
-    private volatile bool _isProcessing;
     private volatile bool _isRunning;
     public bool IsRunning => _isRunning;
 
@@ -49,17 +58,22 @@ public class ProcessMonitor
 
     public void Start(DispatcherQueue dispatcherQueue)
     {
-        _cancellationTokenSource = new CancellationTokenSource();
+        ArgumentNullException.ThrowIfNull(dispatcherQueue);
 
-        _timer = dispatcherQueue.CreateTimer();
-        _timer.Interval = TimeSpan.FromMilliseconds(500);
-        _timer.Tick += OnTimerTick;
-        _timer.Start();
+        if (_monitorLoopTask is not null)
+        {
+            return;
+        }
+
+        _cancellationTokenSource = new CancellationTokenSource();
+        var token = _cancellationTokenSource.Token;
+
+        _monitorLoopTask = Task.Run(() => RunMonitorLoopAsync(token), token);
 
         if (_shouldCheckWebContent)
         {
             _webTimer = dispatcherQueue.CreateTimer();
-            _webTimer.Interval = TimeSpan.FromMilliseconds(5000);
+            _webTimer.Interval = WebTickInterval;
             _webTimer.Tick += OnWebTimerTick;
             _webTimer.Start();
         }
@@ -67,57 +81,84 @@ public class ProcessMonitor
 
     public void Stop()
     {
-        _timer?.Stop();
+        var cts = _cancellationTokenSource;
+        var loop = _monitorLoopTask;
+
         _webTimer?.Stop();
-        _cancellationTokenSource?.Cancel();
-        _cancellationTokenSource?.Dispose();
-        _cancellationTokenSource = null;
-    }
 
-    private void OnTimerTick(DispatcherQueueTimer sender, object args)
-    {
-        if (_isProcessing || _cancellationTokenSource is null)
-        {
-            return;
-        }
-
-        _isProcessing = true;
-        var cancellationToken = _cancellationTokenSource.Token;
-
-        _ = Task.Run(() =>
+        if (cts is not null)
         {
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
 
-                var processes = Process.GetProcesses();
+        if (loop is not null)
+        {
+            try
+            {
+                loop.Wait(StopWaitTimeout);
+            }
+            catch (AggregateException)
+            {
+            }
+        }
 
-                try
-                {
-                    bool isAnyProcessRunning = IsAnyTrackedProcessRunning(processes);
-                    FirstCheckProcess(isAnyProcessRunning);
-                    WriteProcessDuration(isAnyProcessRunning);
-                }
-                finally
-                {
-                    foreach (var process in processes)
-                    {
-                        process.Dispose();
-                    }
-                }
+        // C4: doflushovat aktivní sezení, aby se neztratilo při ukončení aplikace.
+        FlushActiveSessionFinal();
+
+        if (cts is not null)
+        {
+            try
+            {
+                cts.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        _cancellationTokenSource = null;
+        _monitorLoopTask = null;
+    }
+
+    private async Task RunMonitorLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                DoMonitorTick();
             }
             catch (OperationCanceledException)
             {
+                return;
             }
             catch (Exception ex)
             {
                 AppDiagnostics.LogError("Monitoring procesů selhal.", ex);
             }
-            finally
+
+            try
             {
-                _isProcessing = false;
+                await Task.Delay(MonitorTickInterval, cancellationToken).ConfigureAwait(false);
             }
-        }, cancellationToken);
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    private void DoMonitorTick()
+    {
+        bool isAnyProcessRunning = IsAnyTrackedProcessRunning();
+        FirstCheckProcess(isAnyProcessRunning);
+        WriteProcessDuration(isAnyProcessRunning);
     }
 
     private void OnWebTimerTick(DispatcherQueueTimer sender, object args)
@@ -146,18 +187,30 @@ public class ProcessMonitor
         }, cancellationToken);
     }
 
-    private bool IsAnyTrackedProcessRunning(Process[] processes)
+    private bool IsAnyTrackedProcessRunning()
     {
         if (_isWebRunning)
         {
             return true;
         }
 
-        foreach (var process in processes)
+        // C1: dotaz cíleně podle jména procesu místo enumerace všech procesů.
+        foreach (var name in _processNames)
         {
-            if (_processNames.Contains(process.ProcessName))
+            var processes = Process.GetProcessesByName(name);
+            try
             {
-                return true;
+                if (processes.Length > 0)
+                {
+                    return true;
+                }
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
             }
         }
 
@@ -200,7 +253,7 @@ public class ProcessMonitor
                 _processStartTime = DateTime.Now;
                 _weekOfYear = GetIso8601WeekOfYear((DateTime)_processStartTime);
                 _lastLogPosition = GetFileLength(_filePath);
-                _durationsDirty = true;
+                _lastDurationFlushUtc = DateTime.MinValue;
                 return;
             }
 
@@ -211,14 +264,59 @@ public class ProcessMonitor
                 return;
             }
 
-            var logEntry = $"{_weekOfYear}||{_processStartTime.Value:dd-MM-yyyy HH:mm:ss}||{duration.TotalSeconds}\n";
-            TryWriteToFileAtPosition(logEntry, _lastLogPosition);
+            // C4: flushovat běžící sezení nejvýše jednou za 30 s.
+            var nowUtc = DateTime.UtcNow;
+            if ((nowUtc - _lastDurationFlushUtc) < ActiveSessionFlushInterval)
+            {
+                return;
+            }
+
+            if (FlushActiveSessionEntry(_processStartTime.Value, duration))
+            {
+                _lastDurationFlushUtc = nowUtc;
+            }
 
             return;
         }
 
+        // Hra právě skončila – doflushovat finální dobu, aby se neztratilo až 30 s.
+        if (_processStartTime.HasValue)
+        {
+            var finalDuration = DateTime.Now - _processStartTime.Value;
+            if (finalDuration.TotalMilliseconds >= 200)
+            {
+                FlushActiveSessionEntry(_processStartTime.Value, finalDuration);
+            }
+        }
+
         _processStartTime = null;
         _isRunning = false;
+        _lastDurationFlushUtc = DateTime.MinValue;
+        _durationsDirty = true;
+    }
+
+    private bool FlushActiveSessionEntry(DateTime startTime, TimeSpan duration)
+    {
+        var logEntry = $"{_weekOfYear}||{startTime:dd-MM-yyyy HH:mm:ss}||{duration.TotalSeconds}\n";
+        return TryWriteToFileAtPosition(logEntry, _lastLogPosition);
+    }
+
+    private void FlushActiveSessionFinal()
+    {
+        if (!_processStartTime.HasValue)
+        {
+            return;
+        }
+
+        var finalDuration = DateTime.Now - _processStartTime.Value;
+        if (finalDuration.TotalMilliseconds >= 200)
+        {
+            FlushActiveSessionEntry(_processStartTime.Value, finalDuration);
+        }
+
+        _processStartTime = null;
+        _isRunning = false;
+        _lastDurationFlushUtc = DateTime.MinValue;
         _durationsDirty = true;
     }
 
@@ -244,84 +342,171 @@ public class ProcessMonitor
     public WeeklyDurations GetDurations(string filePath, int actualWeekOfYear)
     {
         int actualYear = DateTime.Now.Year;
-        long currentFileLength = GetFileLength(filePath);
 
-        if (_durationsDirty
-            || _cachedWeekOfYear != actualWeekOfYear
-            || _cachedYear != actualYear
-            || (!_processStartTime.HasValue && _cachedFileLength != currentFileLength))
+        WeeklyDurations result;
+        DateTime? activeSessionStart;
+
+        lock (_aggregateLock)
         {
-            _cachedHistoricalDurations = LoadHistoricalDurations(filePath, actualWeekOfYear, actualYear, _processStartTime);
-            _cachedWeekOfYear = actualWeekOfYear;
-            _cachedYear = actualYear;
-            _cachedFileLength = currentFileLength;
-            _durationsDirty = false;
+            EnsureAggregatesUpToDate(filePath, actualWeekOfYear, actualYear);
+            result = new WeeklyDurations(_aggregatedThisWeek, _aggregatedLastWeek);
+            activeSessionStart = _processStartTime;
         }
 
-        var result = _cachedHistoricalDurations;
-
-        if (_processStartTime.HasValue)
+        if (activeSessionStart.HasValue)
         {
-            result = AddActiveSessionDuration(result, actualWeekOfYear, actualYear, _processStartTime.Value);
+            result = AddActiveSessionDuration(result, actualWeekOfYear, actualYear, activeSessionStart.Value);
         }
 
         return result;
     }
 
-    private WeeklyDurations LoadHistoricalDurations(string filePath, int actualWeekOfYear, int actualYear, DateTime? activeSessionStartTime)
+    /// <summary>C3: Načte jen nově přidané řádky logu a inkrementálně doplní agregát.</summary>
+    private void EnsureAggregatesUpToDate(string filePath, int actualWeekOfYear, int actualYear)
     {
-        var weeklyDurations = new TimeSpan();
-        var lastWeekDuration = new TimeSpan();
-        int weeksInLastYear = GetWeeksInYear(actualYear - 1);
+        // Během aktivního sezení čteme jen do _lastLogPosition, protože za ním leží
+        // přepisovaný záznam aktuální session (nepatří do historického agregátu).
+        long limitPosition = _processStartTime.HasValue ? _lastLogPosition : GetFileLength(filePath);
 
-        var lines = ReadAllLinesShared(filePath);
+        bool weekChanged = _aggregatedWeekOfYear != actualWeekOfYear || _aggregatedYear != actualYear;
+        bool fileShrunk = limitPosition < _logReadPosition;
 
-        foreach (var line in lines)
+        if (_durationsDirty || weekChanged || fileShrunk)
         {
-            var parts = line.Split(LogFieldSeparator, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 3)
-            {
-                continue;
-            }
-
-            if (!int.TryParse(parts[0], out var weekOfYear))
-            {
-                continue;
-            }
-
-            if (!DateTime.TryParseExact(parts[1], "dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
-            {
-                continue;
-            }
-
-            if (!FileHelper.TryParseDurationSeconds(parts[2], out var seconds))
-            {
-                continue;
-            }
-
-            var startTimeYear = startTime.Year;
-            var duration = TimeSpan.FromSeconds(seconds);
-
-            if (activeSessionStartTime.HasValue && AreSameLoggedStartTime(startTime, activeSessionStartTime.Value))
-            {
-                continue;
-            }
-
-            if (weekOfYear == actualWeekOfYear && startTimeYear == actualYear)
-            {
-                weeklyDurations += duration;
-            }
-            else if (actualWeekOfYear == 1 && weekOfYear == weeksInLastYear && startTimeYear == actualYear - 1) 
-            {
-                lastWeekDuration += duration;
-            }
-            else if (actualWeekOfYear != 1 && weekOfYear == actualWeekOfYear - 1 && startTimeYear == actualYear)
-            {
-                lastWeekDuration += duration;
-            }
+            _aggregatedThisWeek = TimeSpan.Zero;
+            _aggregatedLastWeek = TimeSpan.Zero;
+            _logReadPosition = 0;
+            _aggregatedWeekOfYear = actualWeekOfYear;
+            _aggregatedYear = actualYear;
+            _durationsDirty = false;
         }
 
-        return new WeeklyDurations(weeklyDurations, lastWeekDuration);
+        if (_logReadPosition >= limitPosition)
+        {
+            return;
+        }
+
+        long newPosition = AppendLogToAggregates(filePath, _logReadPosition, limitPosition, actualWeekOfYear, actualYear);
+        if (newPosition >= 0)
+        {
+            _logReadPosition = newPosition;
+        }
+        else
+        {
+            // Při chybě I/O vyžádat full rescan při dalším volání.
+            _durationsDirty = true;
+        }
+    }
+
+    private long AppendLogToAggregates(string filePath, long startPosition, long endPosition, int actualWeekOfYear, int actualYear)
+    {
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite);
+            if (endPosition > stream.Length)
+            {
+                endPosition = stream.Length;
+            }
+
+            if (startPosition >= endPosition)
+            {
+                return endPosition;
+            }
+
+            stream.Position = startPosition;
+            int remaining = checked((int)(endPosition - startPosition));
+            var buffer = new byte[remaining];
+            int total = 0;
+            while (total < remaining)
+            {
+                int read = stream.Read(buffer, total, remaining - total);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                total += read;
+            }
+
+            int weeksInLastYear = GetWeeksInYear(actualYear - 1);
+            string text = Encoding.UTF8.GetString(buffer, 0, total);
+            int lineStart = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] != '\n')
+                {
+                    continue;
+                }
+
+                ProcessLogLine(text, lineStart, i, actualWeekOfYear, actualYear, weeksInLastYear);
+                lineStart = i + 1;
+            }
+
+            // Cokoli za posledním '\n' je neúplný řádek – přečteme ho příště.
+            return startPosition + lineStart;
+        }
+        catch (IOException ex)
+        {
+            AppDiagnostics.LogWarning($"Inkrementální načtení log souboru '{filePath}' selhalo, vyžádán full rescan.", ex);
+            return -1;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            AppDiagnostics.LogWarning($"Přístup k log souboru '{filePath}' byl odmítnut při inkrementálním čtení.", ex);
+            return -1;
+        }
+    }
+
+    private void ProcessLogLine(string text, int start, int endExclusive, int actualWeekOfYear, int actualYear, int weeksInLastYear)
+    {
+        int lineEnd = endExclusive;
+        if (lineEnd > start && text[lineEnd - 1] == '\r')
+        {
+            lineEnd--;
+        }
+
+        if (lineEnd <= start)
+        {
+            return;
+        }
+
+        var line = text.Substring(start, lineEnd - start);
+        var parts = line.Split(LogFieldSeparator, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 3)
+        {
+            return;
+        }
+
+        if (!int.TryParse(parts[0], out var weekOfYear))
+        {
+            return;
+        }
+
+        if (!DateTime.TryParseExact(parts[1], "dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startTime))
+        {
+            return;
+        }
+
+        if (!FileHelper.TryParseDurationSeconds(parts[2], out var seconds))
+        {
+            return;
+        }
+
+        var duration = TimeSpan.FromSeconds(seconds);
+        int startTimeYear = startTime.Year;
+
+        if (weekOfYear == actualWeekOfYear && startTimeYear == actualYear)
+        {
+            _aggregatedThisWeek += duration;
+        }
+        else if (actualWeekOfYear == 1 && weekOfYear == weeksInLastYear && startTimeYear == actualYear - 1)
+        {
+            _aggregatedLastWeek += duration;
+        }
+        else if (actualWeekOfYear != 1 && weekOfYear == actualWeekOfYear - 1 && startTimeYear == actualYear)
+        {
+            _aggregatedLastWeek += duration;
+        }
     }
 
     private WeeklyDurations AddActiveSessionDuration(WeeklyDurations durations, int actualWeekOfYear, int actualYear, DateTime activeSessionStartTime)
@@ -347,12 +532,6 @@ public class ProcessMonitor
         }
 
         return durations;
-    }
-
-    private static bool AreSameLoggedStartTime(DateTime loggedStartTime, DateTime activeSessionStartTime)
-    {
-        return loggedStartTime.ToString("dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture)
-            == activeSessionStartTime.ToString("dd-MM-yyyy HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     private void CheckAllOpenTabsForUdemy()
@@ -462,28 +641,6 @@ public class ProcessMonitor
         {
             AppDiagnostics.LogWarning("Nepodařilo se aktualizovat délku běhu procesu v logu.", ex);
             return false;
-        }
-    }
-
-    private static string[] ReadAllLinesShared(string filePath)
-    {
-        try
-        {
-            using var stream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            var lines = new List<string>();
-
-            while (reader.ReadLine() is { } line)
-            {
-                lines.Add(line);
-            }
-
-            return [.. lines];
-        }
-        catch (IOException ex)
-        {
-            AppDiagnostics.LogWarning($"Nepodařilo se načíst log soubor '{filePath}'.", ex);
-            return [];
         }
     }
 }
