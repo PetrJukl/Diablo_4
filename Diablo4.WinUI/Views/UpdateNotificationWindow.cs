@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Graphics;
 using Windows.UI;
@@ -26,9 +27,12 @@ internal sealed class UpdateNotificationWindow : Window
     private readonly UpdateCheckResult _updateResult;
     private readonly UpdateService _updateService;
     private readonly TaskCompletionSource<bool> _tcs = new();
+    private CancellationTokenSource? _downloadCts;
     private Button? _installButton;
     private Button? _laterButton;
+    private Button? _cancelButton;
     private ProgressRing? _progressRing;
+    private ProgressBar? _progressBar;
     private TextBlock? _errorText;
     private bool _installSucceeded;
     private bool _zOrderReassertQueued;
@@ -39,7 +43,13 @@ internal sealed class UpdateNotificationWindow : Window
         _updateService = updateService;
         Title = "Kontrola pařby";
         Content = BuildContent();
-        Closed += (_, _) => _tcs.TrySetResult(_installSucceeded);
+        Closed += (_, _) =>
+        {
+            try { _downloadCts?.Cancel(); } catch (ObjectDisposedException) { }
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+            _tcs.TrySetResult(_installSucceeded);
+        };
     }
 
     /// <summary>Zobrazí topmost okno a vrátí true, pokud instalace proběhla úspěšně (aplikace se má zavřít).</summary>
@@ -148,15 +158,36 @@ internal sealed class UpdateNotificationWindow : Window
             Margin = new Thickness(0, 0, 8, 0)
         };
 
+        _progressBar = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 1,
+            Value = 0,
+            ShowPaused = false,
+            ShowError = false,
+            IsIndeterminate = true,
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        infoPanel.Children.Add(_progressBar);
+
         _installButton = new Button { Content = "Instalovat" };
         if (Application.Current.Resources.TryGetValue("AccentButtonStyle", out var accentStyle) && accentStyle is Style style)
         {
             _installButton.Style = style;
         }
 
+        _cancelButton = new Button
+        {
+            Content = "Zrušit",
+            Margin = new Thickness(8, 0, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
+
         _laterButton = new Button { Content = "Později", Margin = new Thickness(8, 0, 0, 0) };
 
         _installButton.Click += InstallButton_Click;
+        _cancelButton.Click += CancelButton_Click;
         _laterButton.Click += (_, _) => Close();
 
         var buttonRow = new StackPanel
@@ -167,6 +198,7 @@ internal sealed class UpdateNotificationWindow : Window
         };
         buttonRow.Children.Add(_progressRing);
         buttonRow.Children.Add(_installButton);
+        buttonRow.Children.Add(_cancelButton);
         buttonRow.Children.Add(_laterButton);
 
         Grid.SetRow(buttonRow, 2);
@@ -179,25 +211,71 @@ internal sealed class UpdateNotificationWindow : Window
     {
         _installButton!.IsEnabled = false;
         _laterButton!.IsEnabled = false;
+        _laterButton.Visibility = Visibility.Collapsed;
+        _cancelButton!.Visibility = Visibility.Visible;
+        _cancelButton.IsEnabled = true;
         _progressRing!.Visibility = Visibility.Visible;
         _progressRing.IsActive = true;
+        _progressBar!.Visibility = Visibility.Visible;
+        _progressBar.IsIndeterminate = true;
+        _progressBar.Value = 0;
         _errorText!.Visibility = Visibility.Collapsed;
+
+        _downloadCts?.Dispose();
+        _downloadCts = new CancellationTokenSource();
+        var token = _downloadCts.Token;
+
+        var progress = new Progress<double>(percent =>
+        {
+            if (_progressBar is null) return;
+            _progressBar.IsIndeterminate = false;
+            _progressBar.Value = percent;
+        });
 
         try
         {
-            await _updateService.DownloadAndInstallAsync(_updateResult.Manifest!);
+            var applyResult = await _updateService.DownloadAndInstallAsync(_updateResult.Manifest!, progress, token);
+
+            if (applyResult == Models.UpdateApplyResult.UserCancelled)
+            {
+                _errorText.Text = "Aktualizace nebyla aplikována (UAC výzva byla odmítnuta).";
+                ResetUiAfterFailure();
+                return;
+            }
+
             _installSucceeded = true;
             Close();
+        }
+        catch (OperationCanceledException)
+        {
+            AppDiagnostics.LogInfo("Stažení aktualizace bylo zrušeno uživatelem nebo timeoutem.");
+            _errorText.Text = "Stažení aktualizace bylo zrušeno.";
+            ResetUiAfterFailure();
         }
         catch (Exception ex)
         {
             AppDiagnostics.LogError("Stažení nebo instalace aktualizace selhalo.", ex);
-            _progressRing.IsActive = false;
-            _progressRing.Visibility = Visibility.Collapsed;
-            _installButton.IsEnabled = true;
-            _laterButton.IsEnabled = true;
-            _errorText.Visibility = Visibility.Visible;
+            _errorText.Text = "Instalaci se nepodařilo dokončit. Zkuste to znovu.";
+            ResetUiAfterFailure();
         }
+    }
+
+    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        _cancelButton!.IsEnabled = false;
+        try { _downloadCts?.Cancel(); } catch (ObjectDisposedException) { }
+    }
+
+    private void ResetUiAfterFailure()
+    {
+        _progressRing!.IsActive = false;
+        _progressRing.Visibility = Visibility.Collapsed;
+        _progressBar!.Visibility = Visibility.Collapsed;
+        _installButton!.IsEnabled = true;
+        _laterButton!.IsEnabled = true;
+        _laterButton.Visibility = Visibility.Visible;
+        _cancelButton!.Visibility = Visibility.Collapsed;
+        _errorText!.Visibility = Visibility.Visible;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

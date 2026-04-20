@@ -82,6 +82,58 @@ public class UpdateServiceTests
     }
 
     [TestMethod]
+    public async Task DownloadUpdateAsync_WhenCancellationRequested_ThrowsOperationCanceledException()
+    {
+        var fileName = $"KontrolaParbySetup-{Guid.NewGuid():N}.exe";
+        var content = new byte[1024 * 256];
+        using var server = await SingleResponseHttpServer.StartAsync(fileName, content);
+        var service = new UpdateService("https://example.invalid/manifest.json");
+
+        UpdateSourcePolicy.TrustOverride = uri => uri.IsLoopback;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        try
+        {
+            await Assert.ThrowsExactlyAsync<TaskCanceledException>(
+                () => service.DownloadUpdateAsync(server.Url, progress: null, cts.Token));
+        }
+        finally
+        {
+            UpdateSourcePolicy.TrustOverride = null;
+        }
+    }
+
+    [TestMethod]
+    public async Task DownloadUpdateAsync_WhenProgressReporterProvided_ReportsCompletion()
+    {
+        var fileName = $"KontrolaParbySetup-{Guid.NewGuid():N}.exe";
+        var content = new byte[1024 * 64];
+        for (int i = 0; i < content.Length; i++) content[i] = (byte)(i % 256);
+        using var server = await SingleResponseHttpServer.StartAsync(fileName, content);
+        var service = new UpdateService("https://example.invalid/manifest.json");
+
+        UpdateSourcePolicy.TrustOverride = uri => uri.IsLoopback;
+
+        try
+        {
+            double lastReported = 0;
+            var progress = new Progress<double>(p => lastReported = p);
+            var downloadedPath = await service.DownloadUpdateAsync(server.Url, progress);
+
+            // Dat dispatcheru čas doručit poslední zprávu progressu (Progress<T> je marshalován přes SynchronizationContext).
+            await Task.Delay(50);
+
+            Assert.IsTrue(File.Exists(downloadedPath));
+            Assert.IsTrue(lastReported > 0, $"Progress nebyl reportován (poslední hodnota: {lastReported}).");
+        }
+        finally
+        {
+            UpdateSourcePolicy.TrustOverride = null;
+        }
+    }
+
+    [TestMethod]
     public async Task DownloadUpdateAsync_WhenDownloadSucceeds_StoresInstallerInLocalApplicationDataUpdatesFolder()
     {
         var fileName = $"KontrolaParbySetup-{Guid.NewGuid():N}.exe";
@@ -215,7 +267,17 @@ public class UpdateServiceTests
         {
             _listener.Stop();
             _listener.Close();
-            _serveTask.GetAwaiter().GetResult();
+            try
+            {
+                _serveTask.GetAwaiter().GetResult();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Listener byl uzavřen dřív, než klient stáhl odpověď (např. při cancellation testu).
+            }
+            catch (HttpListenerException)
+            {
+            }
         }
     }
 
@@ -264,7 +326,16 @@ public class UpdateServiceTests
         {
             _listener.Stop();
             _listener.Close();
-            _serveTask.GetAwaiter().GetResult();
+            try
+            {
+                _serveTask.GetAwaiter().GetResult();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (HttpListenerException)
+            {
+            }
         }
     }
 }

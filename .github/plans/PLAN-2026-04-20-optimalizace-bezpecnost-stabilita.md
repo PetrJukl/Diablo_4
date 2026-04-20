@@ -91,15 +91,15 @@ Iterativní přístup ve **třech fázích**, každá končí zelenými testy a 
 - [ ] Schválení uživatele před fází B
 
 ### Fáze B – Stabilita
-- [ ] B1 – cancellation propagation v download flow
-- [ ] B2 – progress + tlačítko Zrušit
-- [ ] B3 – ošetření UAC odmítnutí
-- [ ] B4 – race-safe shutdown weekend dialogu
-- [ ] B5 – Authenticode kontrola (`WinVerifyTrust` P/Invoke + helper)
-- [ ] B6 – stop timeru po N chybách
-- [ ] B7 – obalení `ConfigureWindow` v try/catch
-- [ ] Unit testy: `ExecutableLaunchPolicyTests` rozšíření o signed/unsigned mock; `UpdateServiceTests` o cancellation
-- [ ] `dotnet test` zelený, manuální smoke (zrušit stahování, podstrčit nepodepsaný EXE do `C:\Games`, zavřít weekend dialog během search)
+- [x] B1 – cancellation propagation v download flow
+- [x] B2 – progress + tlačítko Zrušit
+- [x] B3 – ošetření UAC odmítnutí
+- [x] B4 – race-safe shutdown weekend dialogu
+- [x] B5 – Authenticode kontrola (`WinVerifyTrust` P/Invoke + helper)
+- [x] B6 – stop timeru po N chybách
+- [x] B7 – obalení `ConfigureWindow` v try/catch
+- [x] Unit testy: `AuthenticodeVerifierTests` (3 testy) + `UpdateServiceTests` o cancellation a progress (33/33 zelené)
+- [x] `dotnet test` zelený – manuální smoke ponechán uživateli k odsouhlasení
 - [ ] Commit `feat(stability): fáze B – stabilita update flow a spouštění`
 - [ ] Schválení uživatele před fází C
 
