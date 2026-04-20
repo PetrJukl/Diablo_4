@@ -31,7 +31,7 @@ public class ProcessMonitor
     private bool _durationsDirty = true;
 
     private volatile bool _isWebRunning = false;
-    private volatile bool _isCheckingTabs = false;
+    private int _isCheckingTabsFlag;
     private volatile bool _isProcessing;
     private volatile bool _isRunning;
     public bool IsRunning => _isRunning;
@@ -356,29 +356,44 @@ public class ProcessMonitor
 
     private void CheckAllOpenTabsForUdemy()
     {
-        if (_isCheckingTabs) return;
-        _isCheckingTabs = true;
+        if (Interlocked.CompareExchange(ref _isCheckingTabsFlag, 1, 0) != 0)
+        {
+            return;
+        }
 
         Process[]? allProcesses = null;
         try
         {
             allProcesses = Process.GetProcesses();
-            _isWebRunning = allProcesses
-                .Where(p => p.ProcessName is "firefox" or "chrome" or "msedge")
-                .Any(p =>
+            bool found = false;
+
+            foreach (var process in allProcesses)
+            {
+                if (process.ProcessName is not ("firefox" or "chrome" or "msedge"))
                 {
-                    try { return p.MainWindowTitle.Contains("udemy", StringComparison.OrdinalIgnoreCase); }
-                    catch (InvalidOperationException) { return false; }
-                    catch (Win32Exception) { return false; }
-                });
+                    continue;
+                }
+
+                try
+                {
+                    if (process.MainWindowTitle.Contains("udemy", StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                catch (Exception)
+                {
+                    // Proces mohl skončit nebo přístup k titulku selhal – přeskočit.
+                }
+            }
+
+            _isWebRunning = found;
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
-            AppDiagnostics.LogWarning("Nepodařilo se zjistit procesy prohlížeče pro kontrolu Udemy.", ex);
-        }
-        catch (Win32Exception ex)
-        {
-            AppDiagnostics.LogWarning("Systémová chyba při zjišťování procesů prohlížeče.", ex);
+            _isWebRunning = false;
+            AppDiagnostics.LogWarning("Kontrola prohlížečů pro Udemy selhala.", ex);
         }
         finally
         {
@@ -389,7 +404,8 @@ public class ProcessMonitor
                     p.Dispose();
                 }
             }
-            _isCheckingTabs = false;
+
+            Interlocked.Exchange(ref _isCheckingTabsFlag, 0);
         }
     }
 
