@@ -18,7 +18,7 @@ public class ProcessMonitor
 {
     private static readonly string[] LogFieldSeparator = ["||"];
     private static readonly TimeSpan ActiveSessionFlushInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan MonitorTickInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan MonitorTickInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan WebTickInterval = TimeSpan.FromMilliseconds(5000);
     private static readonly TimeSpan StopWaitTimeout = TimeSpan.FromSeconds(2);
 
