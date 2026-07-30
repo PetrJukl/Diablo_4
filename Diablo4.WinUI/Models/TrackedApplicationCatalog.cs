@@ -33,6 +33,7 @@ internal static class TrackedApplications
     [
         new("DragonAge2", ["DragonAge2"]),
         new("daorigins", ["daorigins"]),
+        new("OblivionRemastered", ["OblivionRemastered"]),
         new("Code", ["Code"]),
         new("devenv", ["devenv"]),
         new("WindowsTerminal", ["WindowsTerminal"]),
