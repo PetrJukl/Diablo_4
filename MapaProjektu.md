@@ -1,6 +1,78 @@
 # Mapa projektu
 
-Tento dokument zatím popisuje release a aktualizační část architektury projektu.
+Tento dokument popisuje katalog sledovaných aplikací i release a aktualizační
+část architektury projektu.
+
+## Sledované aplikace a víkendový dialog
+
+### Zdroj pravdy
+
+Všechny názvy sledovaných aplikací jsou centralizované v
+`Diablo4.WinUI/Models/TrackedApplicationCatalog.cs`. Novou hru proto
+nepřidávej do `MainViewModel`, `ProcessMonitor` ani dialogu samostatně.
+
+```text
+LaunchableGames -----┐
+                     ├─ AllProcessNames -> MainViewModel -> ProcessMonitor
+BackgroundTrackedApps┘
+
+LaunchableGames -> WeekendMotivationGames -> WeekendMotivationDialog
+```
+
+| Soubor | Úloha |
+| --- | --- |
+| `Diablo4.WinUI/Models/TrackedApplicationCatalog.cs` | Jediný zdroj pravdy pro sledované procesy, hry i jejich spouštění. |
+| `Diablo4.WinUI/ViewModels/MainViewModel.cs` | Převezme `AllProcessNames` a předá je monitoru. |
+| `Diablo4.WinUI/Services/ProcessMonitor.cs` | Zjišťuje běh procesů přes `Process.GetProcessesByName`. |
+| `Diablo4.WinUI/Views/WeekendMotivationDialog.xaml.cs` | Zobrazí `WeekendMotivationGames`, vyhledá `ExecutableName` a hru spustí. |
+| `Diablo4.WinUI.Tests/Models/TrackedApplicationCatalogTests.cs` | Regresní testy kontraktu katalogu. |
+
+### Kam patří nová položka
+
+| Požadované chování | Přidej záznam do | Výsledek |
+| --- | --- | --- |
+| Jen sledovat běh aplikace | `BackgroundTrackedApps` | Proces se započítává, ale nezobrazí se ve víkendovém dialogu. |
+| Sledovat hru a nabídnout její spuštění ve víkendovém dialogu | `LaunchableGames` | Hra se sleduje i zobrazí ve víkendovém dialogu. |
+
+Při přesunu existující hry do dialogu záznam přesuň z `BackgroundTrackedApps`
+do `LaunchableGames`; nenechávej dvě kopie. `AllProcessNames` sice duplicity
+odstraní, ale katalog by přestal být jednoznačný.
+
+### Kontrakt názvů
+
+| Pole `TrackedApplicationDefinition` | Formát a význam |
+| --- | --- |
+| `DisplayName` | Uživatelsky čitelný název ve víkendovém dialogu. |
+| `TrackedProcessNames` | Název procesu **bez** `.exe`; může obsahovat více procesů jedné hry či launcheru. |
+| `ExecutableName` | Přesný název hledaného souboru **s** `.exe`. |
+| `LaunchProcessName` | Název procesu **bez** `.exe`, podle kterého dialog pozná, že hra už běží. |
+| `ShowInWeekendDialog` | Pro spustitelnou hru nastav `true`. |
+
+`Process.GetProcessesByName` pracuje s názvem procesu bez přípony `.exe`,
+zatímco dialog potřebuje `.exe` pro vyhledání souboru. Viz [dokumentace
+.NET](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.processname?view=net-10.0).
+
+Příklad úplného záznamu pro Dragon's Dogma 2:
+
+```csharp
+new("Dragon's Dogma 2", ["DD2"], "DD2.exe", "DD2", true)
+```
+
+### Postup při přidání další hry
+
+1. Ověř skutečný název spuštěného procesu a spustitelného souboru.
+2. Přidej jeden záznam do správné kolekce podle tabulky výše.
+3. Pro hru v dialogu použij název procesu bez `.exe` v `TrackedProcessNames`
+   a `LaunchProcessName`, ale soubor s `.exe` v `ExecutableName`.
+4. Doplň nebo uprav regresní test v
+   `Diablo4.WinUI.Tests/Models/TrackedApplicationCatalogTests.cs`.
+5. Spusť ověření:
+
+   ```powershell
+   dotnet test "Diablo4.WinUI.Tests\Diablo4.WinUI.Tests.csproj" --runtime win-x64
+   ```
+
+Teprve pokud je požadovaný release, pokračuj standardním postupem níže.
 
 ## Nasazení aplikace
 
