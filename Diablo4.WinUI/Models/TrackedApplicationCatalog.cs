@@ -26,14 +26,15 @@ internal static class TrackedApplications
         new("Diablo III64", ["Diablo III64"], "Diablo III64.exe", "Diablo III64", true),
         new("Dragon Age The Veilguard", ["Dragon Age The Veilguard"], "Dragon Age The Veilguard.exe", "Dragon Age The Veilguard", true),
         new("DragonAgeInquisition", ["DragonAgeInquisition"], "DragonAgeInquisition.exe", "DragonAgeInquisition", true),
+        new("Dragon Age II", ["DragonAge2"], "DragonAge2.exe", "DragonAge2", true),
+        new("Dragon Age: Origins", ["daorigins"], "daorigins.exe", "daorigins", true),
+        new("Dragon's Dogma 2", ["DD2"], "DD2.exe", "DD2", true),
+        new("The Elder Scrolls IV: Oblivion Remastered", ["OblivionRemastered"], "OblivionRemastered.exe", "OblivionRemastered", true),
         new("MassEffectLauncher", ["MassEffectLauncher", "MassEffect1", "MassEffect2", "MassEffect3"], "MassEffectLauncher.exe", "MassEffectLauncher", true)
     ];
 
     private static readonly IReadOnlyList<TrackedApplicationDefinition> BackgroundTrackedApps =
     [
-        new("DragonAge2", ["DragonAge2"]),
-        new("daorigins", ["daorigins"]),
-        new("OblivionRemastered", ["OblivionRemastered"]),
         new("Code", ["Code"]),
         new("devenv", ["devenv"]),
         new("WindowsTerminal", ["WindowsTerminal"]),
