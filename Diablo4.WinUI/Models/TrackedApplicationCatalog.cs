@@ -38,6 +38,7 @@ internal static class TrackedApplications
         new("Code", ["Code"]),
         new("devenv", ["devenv"]),
         new("GitHub", ["github"]),
+        new("ChatGPT", ["ChatGPT"]),
         new("WindowsTerminal", ["WindowsTerminal"]),
         new("OpenConsole", ["OpenConsole"])
     ];

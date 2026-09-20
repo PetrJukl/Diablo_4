@@ -22,6 +22,13 @@ public class TrackedApplicationCatalogTests
     }
 
     [TestMethod]
+    public void AllProcessNames_ContainsChatGptWithoutExecutableExtension()
+    {
+        CollectionAssert.Contains(TrackedApplications.AllProcessNames, "ChatGPT");
+        CollectionAssert.DoesNotContain(TrackedApplications.AllProcessNames, "ChatGPT.exe");
+    }
+
+    [TestMethod]
     public void WeekendMotivationGames_ContainsPreviouslyBackgroundTrackedGames()
     {
         var gameNames = TrackedApplications.WeekendMotivationGames
