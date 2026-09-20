@@ -37,6 +37,7 @@ internal static class TrackedApplications
     [
         new("Code", ["Code"]),
         new("devenv", ["devenv"]),
+        new("GitHub", ["github"]),
         new("WindowsTerminal", ["WindowsTerminal"]),
         new("OpenConsole", ["OpenConsole"])
     ];

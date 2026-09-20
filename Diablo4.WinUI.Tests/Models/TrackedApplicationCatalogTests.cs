@@ -15,6 +15,13 @@ public class TrackedApplicationCatalogTests
     }
 
     [TestMethod]
+    public void AllProcessNames_ContainsGitHubWithoutExecutableExtension()
+    {
+        CollectionAssert.Contains(TrackedApplications.AllProcessNames, "github");
+        CollectionAssert.DoesNotContain(TrackedApplications.AllProcessNames, "github.exe");
+    }
+
+    [TestMethod]
     public void WeekendMotivationGames_ContainsPreviouslyBackgroundTrackedGames()
     {
         var gameNames = TrackedApplications.WeekendMotivationGames
